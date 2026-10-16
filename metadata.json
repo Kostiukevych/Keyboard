@@ -1,0 +1,6 @@
+{
+  "name": "Virtual Mouse",
+  "description": "Virtual mouse touchpad overlay with neon UI and full on-screen keyboard IME",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

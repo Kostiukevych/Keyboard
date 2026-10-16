@@ -1,53 +1,59 @@
 # Virtual Mouse
 
-Android-приложение: плавающая кнопка → плавающий **тачпад** (двигается, фиксируется замком 🔒, меняет размер)
-и **системная клавиатура** (InputMethodService) на всю ширину экрана. Интерфейс на русском, неоновый стиль.
+Android application providing a virtual floating mouse cursor, on-screen trackpad with neon styling, and a full-featured system on-screen keyboard (IME) with modifier keys and clipboard history.
 
-- Мышь: курсор-оверлей, ЛКМ (удержание 1 с = зажатая кнопка и перетаскивание), ПКМ, колёсико, зона движения.
-- Клавиатура: EN / RU / UK, F1–F12, Esc, Tab, Ctrl/Alt/Shift/Win (залипающие), Caps, стрелки, Home/End/PgUp/PgDn/Del,
-  слои «?123», «#+=», emoji и Unicode (BiDi, стрелки, математика, спецсимволы), история буфера обмена 📋.
-- Служба специальных возможностей (Accessibility) используется **только для мыши** (клики, скролл, drag, back/home/recents).
-  Текст через неё не вводится: им занимается клавиатура.
+## Features
 
-## Как собрать
+- **Floating Trackpad & Mouse Cursor**:
+  - Movable, resizable, and lockable floating trackpad (🔒).
+  - Left click (with hold-to-drag), right click, and scroll wheel emulation.
+  - Smooth cursor overlay with customizable styles (arrow, cross, dot, hand), neon glow, and sensitivity controls.
+  - Floating trigger button (🖱) to toggle trackpad visibility or access quick settings via long press.
+- **Full On-Screen Keyboard IME (`VirtualMouseIME`)**:
+  - Multilingual layouts: English (EN), Russian (RU), Ukrainian (UK).
+  - Function keys (F1–F12), Esc, Tab, sticky modifier keys (Ctrl, Alt, Shift, Win), Caps Lock, and navigation cluster (Arrow keys, Home, End, PgUp, PgDn, Delete).
+  - Layer switching for numbers (`?123`), symbols (`#+=`), emojis, and Unicode symbols (math, arrows, BiDi).
+  - Integrated in-memory clipboard history (📋) with quick insertion.
+- **Accessibility Integration (`MouseAccessibilityService`)**:
+  - Dispatches gesture clicks, scrolls, drags, and navigation triggers (Back, Home, Recents) directly through Android's Accessibility framework.
 
-Требования: JDK 17, Android SDK 34, Gradle 8.5+ (AGP 8.2.2, Kotlin 1.9.22, minSdk 26).
+## Project Structure
 
-1. Разложите файлы по папкам, как показано в `STRUCTURE.txt`.
-2. Откройте проект в Android Studio и нажмите **Build → Build APK(s)**, либо из консоли: `gradle assembleDebug`.
-   APK: `app/build/outputs/apk/debug/`.
-3. Сборка на GitHub: workflow `.github/workflows/android-build.yml` запускается при push в `main`/`master`,
-   при pull request и вручную; APK сохраняется как artifact `VirtualMouse-debug-apk`.
-   По тегу `v*` APK прикрепляется к релизу.
+```
+.
+├── .github/workflows/android-build.yml
+├── app/
+│   ├── build.gradle.kts
+│   ├── proguard-rules.pro
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/com/example/virtualmouse/
+│       │   ├── MainActivity.kt
+│       │   ├── OverlayService.kt
+│       │   ├── MouseAccessibilityService.kt
+│       │   ├── VirtualMouseIME.kt
+│       │   ├── TouchpadWindow.kt
+│       │   ├── CursorOverlay.kt
+│       │   ├── FloatingButton.kt
+│       │   ├── SettingsWindow.kt
+│       │   ├── KeyboardLayouts.kt
+│       │   ├── CursorSettings.kt
+│       │   ├── PreferenceHelper.kt
+│       │   └── ClipboardManager.kt
+│       └── res/
+│           ├── drawable/
+│           ├── layout/
+│           ├── mipmap-*/
+│           ├── values/
+│           └── xml/
+├── build.gradle.kts
+├── settings.gradle.kts
+└── metadata.json
+```
 
-Gradle wrapper в архив не входит: Android Studio создаст его сам, либо выполните `gradle wrapper`.
+## Setup & Permissions
 
-## Разрешения и первый запуск
-
-1. **Поверх других окон**: кнопка «Разрешить поверх окон».
-2. **Accessibility**: кнопка «Включить Accessibility» → Virtual Mouse → включить.
-   На Android 13+ при установке APK не из магазина сначала: Настройки → Приложения → Virtual Mouse → ⋮ →
-   «Разрешить ограниченные настройки», и только потом включайте Accessibility.
-3. **Уведомления** (Android 13+): нужны для постоянного уведомления службы.
-4. Нажмите **Старт**: появится плавающая кнопка 🖱. Тап: показать/скрыть тачпад, долгое нажатие: настройки.
-
-## Как включить клавиатуру
-
-1. На главном экране: «Включить клавиатуру» → включите **Virtual Mouse**.
-2. «Выбрать клавиатуру» (или кнопка ⌨ на тачпаде) → выберите **Virtual Mouse**.
-3. Статус обеих настроек виден на главном экране (✅ / ❌).
-
-Верхняя панель клавиатуры: язык (ENG → РУС → UKR), 📋 буфер (на узких экранах), ⚙ настройки приложения, ⌄ скрыть.
-Размер: 42% высоты экрана в портрете, 55% в ландшафте, не больше 400 dp. При ширине экрана < 600 dp F-ряд скрыт.
-
-## Ограничения
-
-- Accessibility-жесты (клики, drag, скролл) работают только пока служба включена; без неё тачпад покажет подсказку.
-- Некоторые приложения (банки, защищённые экраны) блокируют оверлеи и жесты.
-- Ctrl+C/V/X/A/Z отправляются как события клавиш; приложения без поддержки горячих клавиш обработают их по-своему
-  (для C/V/X/A есть запасной вариант через контекстное меню поля).
-- Поля паролей и некоторые приложения могут не принимать KeyEvent: тогда работает только вставка текста.
-- Backspace учитывает суррогатные пары (emoji), но не составные последовательности (ZWJ).
-- История буфера хранится в памяти процесса и пропадает при его перезапуске. В системный буфер кладутся элементы до ~500 КБ.
-- Чтение системного буфера на Android 10+ разрешено только активной клавиатуре.
-- Web и «Файлы» из исходного HTML-прототипа не перенесены.
+1. **Draw Over Other Apps (`SYSTEM_ALERT_WINDOW`)**: Required for the floating cursor and touchpad overlay.
+2. **Accessibility Service (`MouseAccessibilityService`)**: Required for dispatching cursor clicks and gestures.
+3. **Input Method (`VirtualMouseIME`)**: Enable in Android Settings → Language & Input → On-Screen Keyboard.
+4. **Notifications (`POST_NOTIFICATIONS`)**: Keeps the foreground service running smoothly with persistent control notifications.
