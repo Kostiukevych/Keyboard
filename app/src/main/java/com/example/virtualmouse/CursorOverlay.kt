@@ -2,9 +2,7 @@ package com.example.virtualmouse
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.os.Build
 import android.util.DisplayMetrics
@@ -15,8 +13,8 @@ import androidx.core.content.ContextCompat
 
 /**
  * Оверлей курсора мыши.
- * Поддерживает 3D-стрелку из HTML-дизайна, свечение, выбор размера,
- * цвета и анимацию нажатия (pressed 0.88x).
+ * Чистая векторная стрелка без цветного ореола и тени,
+ * с поддержкой цвета, размера и плавной анимации нажатия (0.88x).
  */
 class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
@@ -28,7 +26,6 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
     private var shown = false
     private var settings = CursorSettings()
     private var view: CursorView? = null
-    private var pad = 0
     private var hotX = 0
     private var hotY = 0
     private val density = ctx.resources.displayMetrics.density
@@ -61,17 +58,11 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
     private inner class CursorView(c: Context) : View(c) {
         var icon: Bitmap? = null
-        var glow: Bitmap? = null
         var total = 1
-        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
         override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(total, total)
 
         override fun onDraw(c: Canvas) {
-            glow?.let {
-                c.drawBitmap(it, 0f, 0f, glowPaint)
-                c.drawBitmap(it, 0f, 0f, glowPaint)
-            }
             icon?.let { c.drawBitmap(it, 0f, 0f, null) }
         }
     }
@@ -79,41 +70,35 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
     private fun rebuild() {
         val s = settings
         val size = (s.cursorSizeDp * density).toInt().coerceAtLeast(8)
-        pad = (size * 0.35f).toInt()
-        val total = size + pad * 2
         val res = when (s.cursorStyle) {
             1 -> R.drawable.cursor_cross
             2 -> R.drawable.cursor_dot
             3 -> R.drawable.cursor_hand
             else -> R.drawable.cursor_arrow
         }
-        val full = Bitmap.createBitmap(total, total, Bitmap.Config.ARGB_8888)
+        val full = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         ContextCompat.getDrawable(ctx, res)?.mutate()?.let {
-            it.setBounds(pad, pad, pad + size, pad + size)
+            it.setBounds(0, 0, size, size)
             it.setTint(s.cursorColor)
             it.draw(Canvas(full))
         }
-        val blur = Paint().apply { maskFilter = BlurMaskFilter(pad * 0.6f, BlurMaskFilter.Blur.NORMAL) }
-        val glow = full.extractAlpha(blur, null)
+
         if (s.cursorStyle == 0) {
-            // Точка острия стрелки (22.5%, 19.4%)
-            hotX = pad + (size * 0.225f).toInt()
-            hotY = pad + (size * 0.194f).toInt()
+            hotX = (size * 0.225f).toInt()
+            hotY = (size * 0.194f).toInt()
         } else {
-            hotX = pad + size / 2
-            hotY = pad + size / 2
+            hotX = size / 2
+            hotY = size / 2
         }
+
         val v = view ?: CursorView(ctx).also { view = it }
         v.icon?.recycle()
-        v.glow?.recycle()
         v.icon = full
-        v.glow = glow
-        v.total = total
-        v.glowPaint.color = s.glowColor
+        v.total = size
         v.pivotX = hotX.toFloat()
         v.pivotY = hotY.toFloat()
-        lp.width = total
-        lp.height = total
+        lp.width = size
+        lp.height = size
         v.requestLayout()
         v.invalidate()
         update()
@@ -188,7 +173,6 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
     fun destroy() {
         hide()
         view?.icon?.recycle()
-        view?.glow?.recycle()
         view = null
     }
 }

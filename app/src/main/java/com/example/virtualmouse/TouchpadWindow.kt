@@ -3,7 +3,6 @@ package com.example.virtualmouse
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -17,13 +16,10 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
@@ -55,12 +51,10 @@ class TouchpadWindow(
 
     private var leftFill: View? = null
     private var leftHz: View? = null
-    private var leftLabel: TextView? = null
     private var rightHz: View? = null
     private var lockBtn: TextView? = null
     private var wheelView: WheelView? = null
     private var ctxMenu: View? = null
-    private var statusHint: TextView? = null
 
     private var held = false
     private var charging = false
@@ -184,9 +178,7 @@ class TouchpadWindow(
         }
         a.dragStart(cursor.x, cursor.y)
         held = true
-        leftLabel?.text = "ЛКМ 🔒"
         leftHz?.setBackgroundColor(Color.WHITE)
-        statusHint?.text = "Выделение (ЛКМ зажата)"
         sounds.beep(500)
         vibrate(40)
     }
@@ -194,11 +186,9 @@ class TouchpadWindow(
     private fun release() {
         MouseAccessibilityService.instance?.dragEnd()
         held = false
-        leftLabel?.text = "ЛКМ"
         leftHz?.setBackgroundColor(getSettings().padColor)
         leftFill?.layoutParams?.width = 0
         leftFill?.requestLayout()
-        statusHint?.text = "Тачпад"
         sounds.beep(180)
     }
 
@@ -233,12 +223,10 @@ class TouchpadWindow(
     private fun bind(v: View) {
         leftFill = v.findViewById(R.id.pad_left_fill)
         leftHz = v.findViewById(R.id.pad_left_hz)
-        leftLabel = v.findViewById(R.id.pad_left_label)
         rightHz = v.findViewById(R.id.pad_right_hz)
         lockBtn = v.findViewById(R.id.pad_btn_lock)
         wheelView = v.findViewById(R.id.pad_wheel_view)
         ctxMenu = v.findViewById(R.id.pad_ctx_menu)
-        statusHint = v.findViewById(R.id.pad_status_hint)
 
         lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
 
@@ -388,7 +376,7 @@ class TouchpadWindow(
                                 svc()?.rightClick(cursor.x, cursor.y)
                             }
                             rClickTimer = runner
-                            handler.postDelayed(runner, 320)
+                            handler.postDelayed(runner, 300)
                         }
                     }
                 }
@@ -410,7 +398,6 @@ class TouchpadWindow(
     }
 
     private fun bindContextMenu(v: View) {
-        val menu = ctxMenu ?: return
         val actions = listOf(
             R.id.ctx_undo, R.id.ctx_redo, R.id.ctx_cut,
             R.id.ctx_copy, R.id.ctx_paste, R.id.ctx_delete, R.id.ctx_select_all
@@ -419,7 +406,6 @@ class TouchpadWindow(
             v.findViewById<View>(id)?.setOnClickListener {
                 sounds.beep(180)
                 closeContextMenu()
-                // Выполняем имитацию контекстного клика
                 svc()?.rightClick(cursor.x, cursor.y)
             }
         }
@@ -427,38 +413,41 @@ class TouchpadWindow(
 
     private fun bindWheel(w: View) {
         var last = 0f
-        var acc = 0f
+        var tickAcc = 0f
+        var scrollAcc = 0f
         w.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     closeContextMenu()
                     last = e.rawY
-                    acc = 0f
+                    tickAcc = 0f
+                    scrollAcc = 0f
                     lastWheelTick = 0f
                     svc()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = e.rawY - last
-                    acc += dy
                     last = e.rawY
+                    tickAcc += dy
+                    scrollAcc += dy
                     wheelView?.setScrollOffset(dy)
 
-                    if (abs(acc - lastWheelTick) > dp(10)) {
+                    // Щелчок колёсика каждые 8dp перемещения пальца
+                    if (abs(tickAcc - lastWheelTick) >= dp(8)) {
                         sounds.wheelTick()
-                        lastWheelTick = acc
+                        lastWheelTick = tickAcc
                     }
 
-                    val step = dp(16).toFloat()
-                    while (abs(acc) >= step) {
-                        val dir = if (acc > 0) -1 else 1
-                        acc -= step * -dir
-                        lastWheelTick = acc
-                        MouseAccessibilityService.instance
-                            ?.scroll(cursor.x, cursor.y, dir, dp(120).toFloat())
+                    // Жест скролла: каждые 18dp пальца прокручиваем длинным свайпом
+                    val step = dp(18).toFloat()
+                    while (abs(scrollAcc) >= step) {
+                        val dir = if (scrollAcc > 0) 1 else -1
+                        scrollAcc -= step * dir
+                        svc()?.scroll(cursor.x, cursor.y, dir, 450f)
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // Конец скролла
+                    // Конец касания
                 }
             }
             true

@@ -62,7 +62,7 @@ class MouseAccessibilityService : AccessibilityService() {
     private fun send(s: GestureDescription.StrokeDescription, cb: GestureResultCallback? = null): Boolean =
         try {
             dispatchGesture(GestureDescription.Builder().addStroke(s).build(), cb, null)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
 
@@ -75,16 +75,34 @@ class MouseAccessibilityService : AccessibilityService() {
 
     fun rightClick(x: Float, y: Float) = tap(x, y, 600)
 
-    fun scroll(x: Float, y: Float, dir: Int, distPx: Float) {
-        val half = distPx / 2f * if (dir >= 0) 1 else -1
-        val sy = cy(y - half)
-        val ey = cy(y + half)
-        if (sy == ey) return
-        val p = Path().apply {
-            moveTo(cx(x), sy)
-            lineTo(cx(x), ey)
+    /**
+     * Надежный жест скролла:
+     * dir > 0: прокрутка страницы вниз (свайп снизу вверх)
+     * dir < 0: прокрутка страницы вверх (свайп сверху вниз)
+     */
+    fun scroll(x: Float, y: Float, dir: Int, distPx: Float = 450f) {
+        val (sw, sh) = screen()
+        val len = maxOf(350f, distPx)
+        val px = cx(x)
+        val py = cy(y).coerceIn(len / 2f + 40f, maxOf(len / 2f + 40f, sh - len / 2f - 40f))
+
+        val startY: Float
+        val endY: Float
+        if (dir > 0) {
+            // Прокрутка вниз: палец свайпает вверх
+            startY = py + len / 2f
+            endY = py - len / 2f
+        } else {
+            // Прокрутка вверх: палец свайпает вниз
+            startY = py - len / 2f
+            endY = py + len / 2f
         }
-        send(GestureDescription.StrokeDescription(p, 0, 250))
+
+        val p = Path().apply {
+            moveTo(px, startY)
+            lineTo(px, endY)
+        }
+        send(GestureDescription.StrokeDescription(p, 0, 80))
     }
 
     fun dragStart(x: Float, y: Float) {

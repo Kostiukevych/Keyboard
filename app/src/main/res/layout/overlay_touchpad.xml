@@ -31,9 +31,9 @@
                 android:layout_weight="1"
                 android:gravity="center_vertical"
                 android:paddingStart="6dp"
-                android:text="⠿ Тачпад"
+                android:text="⠿"
                 android:textColor="@color/acc_soft"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -83,15 +83,15 @@
                 android:layout_height="match_parent"
                 android:orientation="vertical">
 
-                <!-- Верхний блок: ЛКМ, Колесо, ПКМ (.top-bar) -->
+                <!-- Верхний блок: полоска ЛКМ, Колесо, полоска ПКМ (.top-bar) -->
                 <LinearLayout
                     android:id="@+id/pad_top_bar"
                     android:layout_width="match_parent"
-                    android:layout_height="62dp"
+                    android:layout_height="56dp"
                     android:background="#20000000"
                     android:orientation="horizontal">
 
-                    <!-- Кнопка ЛКМ с индикацией зарядки и полосой fill -->
+                    <!-- Кнопка ЛКМ с индикацией зарядки и горизонтальной неоновой полоской hz -->
                     <FrameLayout
                         android:id="@+id/pad_btn_left"
                         android:layout_width="0dp"
@@ -107,35 +107,19 @@
                             android:layout_height="match_parent"
                             android:background="#552E7BFF" />
 
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:gravity="center"
-                            android:orientation="vertical">
-
-                            <!-- Горизонтальная светящаяся полоска .hz -->
-                            <View
-                                android:id="@+id/pad_left_hz"
-                                android:layout_width="36dp"
-                                android:layout_height="3.5dp"
-                                android:background="#2E7BFF" />
-
-                            <TextView
-                                android:id="@+id/pad_left_label"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:text="ЛКМ"
-                                android:textColor="@color/txt_main"
-                                android:textSize="13sp"
-                                android:textStyle="bold" />
-                        </LinearLayout>
+                        <!-- Горизонтальная светящаяся полоска .hz по центру -->
+                        <View
+                            android:id="@+id/pad_left_hz"
+                            android:layout_width="44dp"
+                            android:layout_height="4dp"
+                            android:layout_gravity="center"
+                            android:background="#2E7BFF" />
                     </FrameLayout>
 
                     <!-- Блок колёсика (.wheel-box) -->
                     <FrameLayout
                         android:id="@+id/pad_wheel_box"
-                        android:layout_width="52dp"
+                        android:layout_width="56dp"
                         android:layout_height="match_parent"
                         android:background="#40000000"
                         android:clickable="true"
@@ -156,11 +140,10 @@
                         <!-- Колёсико (.wheel) -->
                         <FrameLayout
                             android:id="@+id/pad_wheel"
-                            android:layout_width="24dp"
-                            android:layout_height="50dp"
+                            android:layout_width="26dp"
+                            android:layout_height="48dp"
                             android:layout_gravity="center">
 
-                            <!-- Кастомная отрисовка насечек колесика -->
                             <com.example.virtualmouse.WheelView
                                 android:id="@+id/pad_wheel_view"
                                 android:layout_width="match_parent"
@@ -168,7 +151,7 @@
                         </FrameLayout>
                     </FrameLayout>
 
-                    <!-- Кнопка ПКМ -->
+                    <!-- Кнопка ПКМ с горизонтальной полоской hz -->
                     <FrameLayout
                         android:id="@+id/pad_btn_right"
                         android:layout_width="0dp"
@@ -177,29 +160,13 @@
                         android:clickable="true"
                         android:focusable="true">
 
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:gravity="center"
-                            android:orientation="vertical">
-
-                            <!-- Горизонтальная полоска .hz -->
-                            <View
-                                android:id="@+id/pad_right_hz"
-                                android:layout_width="36dp"
-                                android:layout_height="3.5dp"
-                                android:background="#2E7BFF" />
-
-                            <TextView
-                                android:id="@+id/pad_right_label"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:text="ПКМ"
-                                android:textColor="@color/txt_main"
-                                android:textSize="13sp"
-                                android:textStyle="bold" />
-                        </LinearLayout>
+                        <!-- Горизонтальная полоска .hz по центру -->
+                        <View
+                            android:id="@+id/pad_right_hz"
+                            android:layout_width="44dp"
+                            android:layout_height="4dp"
+                            android:layout_gravity="center"
+                            android:background="#2E7BFF" />
                     </FrameLayout>
                 </LinearLayout>
 
@@ -210,25 +177,14 @@
                     android:layout_height="1dp"
                     android:background="#352E7BFF" />
 
-                <!-- Основная зона перемещения курсора (.main) -->
+                <!-- Основная зона перемещения курсора (.main, чистая без текста) -->
                 <FrameLayout
                     android:id="@+id/pad_move_area"
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_weight="1"
                     android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:id="@+id/pad_status_hint"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        android:text="Тачпад"
-                        android:textColor="#35A4C6FF"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-                </FrameLayout>
+                    android:focusable="true" />
             </LinearLayout>
         </FrameLayout>
     </LinearLayout>
