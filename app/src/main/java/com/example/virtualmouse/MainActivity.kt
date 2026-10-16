@@ -87,22 +87,57 @@ class MainActivity : AppCompatActivity() {
     private fun overlayOk() = Settings.canDrawOverlays(this)
 
     private fun accessOk(): Boolean {
-        val cn = ComponentName(this, MouseAccessibilityService::class.java)
-        val list = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-        val found = list?.split(':')?.any {
-            it.equals(cn.flattenToString(), true) || it.equals(cn.flattenToShortString(), true)
-        } ?: false
-        return found || MouseAccessibilityService.instance != null
+        if (MouseAccessibilityService.instance != null) return true
+        return try {
+            val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+            val enabledServices = am?.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            val cn = ComponentName(this, MouseAccessibilityService::class.java)
+            val foundInAm = enabledServices?.any {
+                it.resolveInfo?.serviceInfo?.packageName == packageName &&
+                        (it.resolveInfo?.serviceInfo?.name == cn.className || it.id?.contains(packageName) == true)
+            } ?: false
+            if (foundInAm) return true
+
+            val list = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            list?.split(':')?.any {
+                it.equals(cn.flattenToString(), true) || it.equals(cn.flattenToShortString(), true)
+            } ?: false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun imeEnabled(): Boolean {
-        val s = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_INPUT_METHODS)
-        return s?.contains(packageName) == true
+        return try {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.enabledInputMethodList?.any { it.packageName == packageName } ?: false
+        } catch (_: Exception) {
+            try {
+                val s = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_INPUT_METHODS)
+                s?.contains(packageName) == true
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     private fun imeSelected(): Boolean {
-        val s = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-        return s?.startsWith("$packageName/") == true
+        return try {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            if (Build.VERSION.SDK_INT >= 34) {
+                imm?.currentInputMethodInfo?.packageName == packageName
+            } else {
+                val s = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                s?.startsWith("$packageName/") == true
+            }
+        } catch (_: Exception) {
+            try {
+                val s = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+                s?.startsWith("$packageName/") == true
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     private fun mark(id: Int, ok: Boolean, text: Int) {
