@@ -2,19 +2,27 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/pad_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/bg_neon_panel">
+    android:layout_height="match_parent">
 
+    <!-- Внешняя карточка-платформа со стеклянным градиентом -->
     <LinearLayout
+        android:id="@+id/pad_card"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="@drawable/bg_card_platform"
         android:orientation="vertical"
-        android:padding="6dp">
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="6dp">
 
+        <!-- Верхняя полоса управления (Заголовок для перетаскивания + стеклянные кнопки) -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="36dp"
-            android:orientation="horizontal">
+            android:layout_height="32dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="4dp">
 
             <TextView
                 android:id="@+id/pad_title"
@@ -22,127 +30,314 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center_vertical"
-                android:paddingStart="8dp"
+                android:paddingStart="6dp"
                 android:text="⠿ Тачпад"
-                android:textColor="#00BFFF"
-                android:textSize="13sp" />
+                android:textColor="@color/acc_soft"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/pad_btn_lock"
                 style="@style/BarKeyStyle"
-                android:layout_width="40dp"
-                android:layout_height="match_parent"
-                android:text="🔓" />
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:text="🔓"
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/pad_btn_kb"
                 style="@style/BarKeyStyle"
-                android:layout_width="40dp"
-                android:layout_height="match_parent"
-                android:text="⌨" />
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:text="⌨"
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/pad_btn_settings"
                 style="@style/BarKeyStyle"
-                android:layout_width="40dp"
-                android:layout_height="match_parent"
-                android:text="⚙" />
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:text="⚙"
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/pad_btn_close"
                 style="@style/BarKeyStyle"
-                android:layout_width="40dp"
-                android:layout_height="match_parent"
-                android:text="✕" />
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:text="✕"
+                android:textSize="12sp" />
         </LinearLayout>
 
-        <LinearLayout
+        <!-- Утопленная стеклянная панель тачпада (.touchpad) -->
+        <FrameLayout
+            android:id="@+id/pad_well"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="4dp"
             android:layout_weight="1"
-            android:orientation="horizontal">
+            android:background="@drawable/bg_touchpad_well">
 
+            <!-- Внутренний контейнер: верхние кнопки + зона движения -->
             <LinearLayout
-                android:layout_width="72dp"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical">
 
+                <!-- Верхний блок: ЛКМ, Колесо, ПКМ (.top-bar) -->
+                <LinearLayout
+                    android:id="@+id/pad_top_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="62dp"
+                    android:background="#20000000"
+                    android:orientation="horizontal">
+
+                    <!-- Кнопка ЛКМ с индикацией зарядки и полосой fill -->
+                    <FrameLayout
+                        android:id="@+id/pad_btn_left"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <!-- Заливка зарядки фиксации ЛКМ (0..100%) -->
+                        <View
+                            android:id="@+id/pad_left_fill"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:background="#552E7BFF" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <!-- Горизонтальная светящаяся полоска .hz -->
+                            <View
+                                android:id="@+id/pad_left_hz"
+                                android:layout_width="36dp"
+                                android:layout_height="3.5dp"
+                                android:background="#2E7BFF" />
+
+                            <TextView
+                                android:id="@+id/pad_left_label"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:text="ЛКМ"
+                                android:textColor="@color/txt_main"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </FrameLayout>
+
+                    <!-- Блок колёсика (.wheel-box) -->
+                    <FrameLayout
+                        android:id="@+id/pad_wheel_box"
+                        android:layout_width="52dp"
+                        android:layout_height="match_parent"
+                        android:background="#40000000"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:layout_gravity="start"
+                            android:background="#402E7BFF" />
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:layout_gravity="end"
+                            android:background="#402E7BFF" />
+
+                        <!-- Колёсико (.wheel) -->
+                        <FrameLayout
+                            android:id="@+id/pad_wheel"
+                            android:layout_width="24dp"
+                            android:layout_height="50dp"
+                            android:layout_gravity="center">
+
+                            <!-- Кастомная отрисовка насечек колесика -->
+                            <com.example.virtualmouse.WheelView
+                                android:id="@+id/pad_wheel_view"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent" />
+                        </FrameLayout>
+                    </FrameLayout>
+
+                    <!-- Кнопка ПКМ -->
+                    <FrameLayout
+                        android:id="@+id/pad_btn_right"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <!-- Горизонтальная полоска .hz -->
+                            <View
+                                android:id="@+id/pad_right_hz"
+                                android:layout_width="36dp"
+                                android:layout_height="3.5dp"
+                                android:background="#2E7BFF" />
+
+                            <TextView
+                                android:id="@+id/pad_right_label"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:text="ПКМ"
+                                android:textColor="@color/txt_main"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </FrameLayout>
+                </LinearLayout>
+
+                <!-- Горизонтальный разделитель под панелью кнопок -->
+                <View
+                    android:id="@+id/pad_divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#352E7BFF" />
+
+                <!-- Основная зона перемещения курсора (.main) -->
                 <FrameLayout
-                    android:id="@+id/pad_btn_left"
+                    android:id="@+id/pad_move_area"
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
-                    android:layout_margin="2dp"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_neon_button">
+                    android:clickable="true"
+                    android:focusable="true">
 
                     <TextView
-                        android:id="@+id/pad_left_label"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:gravity="center"
-                        android:text="ЛКМ"
-                        android:textColor="#E0F7FF"
-                        android:textSize="14sp" />
-
-                    <ProgressBar
-                        android:id="@+id/pad_charge"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="4dp"
-                        android:layout_gravity="bottom"
-                        android:layout_margin="6dp"
-                        android:max="100"
-                        android:progress="0"
-                        android:progressTint="#00BFFF" />
+                        android:id="@+id/pad_status_hint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="Тачпад"
+                        android:textColor="#35A4C6FF"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
                 </FrameLayout>
-
-                <TextView
-                    android:id="@+id/pad_wheel"
-                    style="@style/KeyStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:text="▲\nКолесо\n▼"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/pad_btn_right"
-                    style="@style/KeyStyle"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:text="ПКМ" />
             </LinearLayout>
-
-            <FrameLayout
-                android:id="@+id/pad_move_area"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_margin="2dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_neon_move_area">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:gravity="center"
-                    android:text="Зона движения"
-                    android:textColor="#5500BFFF"
-                    android:textSize="13sp" />
-            </FrameLayout>
-        </LinearLayout>
+        </FrameLayout>
     </LinearLayout>
 
+    <!-- Всплывающее контекстное меню ПКМ (.ctx-menu) -->
+    <LinearLayout
+        android:id="@+id/pad_ctx_menu"
+        android:layout_width="190dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_ctx_menu"
+        android:elevation="12dp"
+        android:orientation="vertical"
+        android:padding="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/ctx_undo"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Отменить      Ctrl+Z"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/ctx_redo"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Повторить     Ctrl+Y"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_margin="3dp"
+            android:background="#402E7BFF" />
+
+        <TextView
+            android:id="@+id/ctx_cut"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Вырезать      Ctrl+X"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/ctx_copy"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Копировать    Ctrl+C"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/ctx_paste"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Вставить      Ctrl+V"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/ctx_delete"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Удалить       Del"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_margin="3dp"
+            android:background="#402E7BFF" />
+
+        <TextView
+            android:id="@+id/ctx_select_all"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Выделить всё  Ctrl+A"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Уголок изменения размера в нижнем правом углу -->
     <TextView
         android:id="@+id/pad_resize"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
         android:layout_gravity="bottom|end"
         android:gravity="bottom|end"
-        android:paddingEnd="4dp"
-        android:paddingBottom="2dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="4dp"
         android:text="◢"
-        android:textColor="#00BFFF"
+        android:textColor="@color/acc_soft"
         android:textSize="16sp" />
 </FrameLayout>

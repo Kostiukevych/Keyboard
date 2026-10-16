@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Тень снизу -->
+    <item
+        android:bottom="0dp"
+        android:left="0dp"
+        android:right="0dp"
+        android:top="2dp">
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="26dp"
+                android:topRightRadius="26dp"
+                android:bottomLeftRadius="20dp"
+                android:bottomRightRadius="20dp" />
+            <solid android:color="#99000000" />
+        </shape>
+    </item>
+
+    <!-- Основной корпус карточки -->
+    <item
+        android:bottom="2dp"
+        android:left="0dp"
+        android:right="0dp"
+        android:top="0dp">
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="26dp"
+                android:topRightRadius="26dp"
+                android:bottomLeftRadius="20dp"
+                android:bottomRightRadius="20dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#1C293F"
+                android:centerColor="#111A29"
+                android:endColor="#0B1019" />
+            <stroke
+                android:width="1.2dp"
+                android:color="#352E7BFF" />
+        </shape>
+    </item>
+
+    <!-- Верхний световой блик -->
+    <item
+        android:bottom="140dp"
+        android:left="2dp"
+        android:right="2dp"
+        android:top="1dp">
+        <shape android:shape="rectangle">
+            <corners
+                android:topLeftRadius="25dp"
+                android:topRightRadius="25dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+            <gradient
+                android:angle="270"
+                android:startColor="#18FFFFFF"
+                android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

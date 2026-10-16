@@ -1,22 +1,29 @@
 package com.example.virtualmouse
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.util.DisplayMetrics
 import android.view.ContextThemeWrapper
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.ProgressBar
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import android.os.Build
-import android.util.DisplayMetrics
+import androidx.core.content.ContextCompat
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
@@ -34,6 +41,8 @@ class TouchpadWindow(
 ) {
     private val density = ctx.resources.displayMetrics.density
     private val handler = Handler(Looper.getMainLooper())
+    private val sounds = SoundManager.get(ctx) { getSettings().soundOn }
+
     private var root: View? = null
     private val lp = WindowManager.LayoutParams(
         0, 0,
@@ -44,12 +53,22 @@ class TouchpadWindow(
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    private var bar: ProgressBar? = null
+    private var leftFill: View? = null
+    private var leftHz: View? = null
     private var leftLabel: TextView? = null
+    private var rightHz: View? = null
     private var lockBtn: TextView? = null
+    private var wheelView: WheelView? = null
+    private var ctxMenu: View? = null
+    private var statusHint: TextView? = null
+
     private var held = false
     private var charging = false
     private var chargeStart = 0L
+
+    private var rClickCount = 0
+    private var rClickTimer: Runnable? = null
+    private var lastWheelTick = 0f
 
     val isShown: Boolean get() = root != null
 
@@ -89,7 +108,7 @@ class TouchpadWindow(
         val v = root ?: return
         try {
             wm.updateViewLayout(v, lp)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -102,7 +121,8 @@ class TouchpadWindow(
         try {
             wm.addView(v, lp)
             root = v
-        } catch (e: Exception) {
+            applyColors()
+        } catch (_: Exception) {
             Toast.makeText(ctx, "Нет разрешения «Поверх других окон»", Toast.LENGTH_SHORT).show()
         }
     }
@@ -110,10 +130,11 @@ class TouchpadWindow(
     fun hide() {
         stopCharge()
         if (held) release()
+        closeContextMenu()
         root?.let {
             try {
                 wm.removeView(it)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
         root = null
@@ -123,42 +144,79 @@ class TouchpadWindow(
         if (root == null) return
         fit()
         lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
+        applyColors()
         refresh()
+    }
+
+    private fun applyColors() {
+        val s = getSettings()
+        wheelView?.accentColor = s.padColor
+        leftHz?.setBackgroundColor(if (held) Color.WHITE else s.padColor)
+        rightHz?.setBackgroundColor(s.padColor)
+        root?.findViewById<TextView>(R.id.pad_title)?.setTextColor(s.padColor)
     }
 
     fun destroy() {
         hide()
     }
 
+    private fun vibrate(ms: Long) {
+        try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                val vm = ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator?.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                val v = ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                @Suppress("DEPRECATION")
+                v?.vibrate(ms)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     private fun engage() {
         val a = svc()
         if (a == null) {
-            bar?.progress = 0
+            leftFill?.layoutParams?.width = 0
+            leftFill?.requestLayout()
             return
         }
         a.dragStart(cursor.x, cursor.y)
         held = true
-        leftLabel?.text = "ЛКМ ●"
-        root?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        leftLabel?.text = "ЛКМ 🔒"
+        leftHz?.setBackgroundColor(Color.WHITE)
+        statusHint?.text = "Выделение (ЛКМ зажата)"
+        sounds.beep(500)
+        vibrate(40)
     }
 
     private fun release() {
         MouseAccessibilityService.instance?.dragEnd()
         held = false
         leftLabel?.text = "ЛКМ"
-        bar?.progress = 0
+        leftHz?.setBackgroundColor(getSettings().padColor)
+        leftFill?.layoutParams?.width = 0
+        leftFill?.requestLayout()
+        statusHint?.text = "Тачпад"
+        sounds.beep(180)
     }
 
     private val tick = object : Runnable {
         override fun run() {
-            val p = ((SystemClock.uptimeMillis() - chargeStart) / 10).toInt()
-            if (p >= 100) {
+            if (!charging) return
+            val btn = root?.findViewById<View>(R.id.pad_btn_left) ?: return
+            val totalW = btn.width
+            val elapsed = SystemClock.uptimeMillis() - chargeStart
+            val p = (elapsed.toFloat() / 1000f).coerceIn(0f, 1f)
+            leftFill?.layoutParams?.width = (totalW * p).toInt()
+            leftFill?.requestLayout()
+
+            if (p >= 1f) {
                 charging = false
-                bar?.progress = 100
                 engage()
             } else {
-                bar?.progress = p
-                handler.postDelayed(this, 40)
+                handler.postDelayed(this, 16)
             }
         }
     }
@@ -166,33 +224,51 @@ class TouchpadWindow(
     private fun stopCharge() {
         charging = false
         handler.removeCallbacks(tick)
-        if (!held) bar?.progress = 0
+        if (!held) {
+            leftFill?.layoutParams?.width = 0
+            leftFill?.requestLayout()
+        }
     }
 
     private fun bind(v: View) {
-        bar = v.findViewById(R.id.pad_charge)
+        leftFill = v.findViewById(R.id.pad_left_fill)
+        leftHz = v.findViewById(R.id.pad_left_hz)
         leftLabel = v.findViewById(R.id.pad_left_label)
+        rightHz = v.findViewById(R.id.pad_right_hz)
         lockBtn = v.findViewById(R.id.pad_btn_lock)
+        wheelView = v.findViewById(R.id.pad_wheel_view)
+        ctxMenu = v.findViewById(R.id.pad_ctx_menu)
+        statusHint = v.findViewById(R.id.pad_status_hint)
+
         lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
 
         lockBtn?.setOnClickListener {
             val s = getSettings()
             s.padLocked = !s.padLocked
             lockBtn?.text = if (s.padLocked) "🔒" else "🔓"
+            sounds.beep(340)
             save()
         }
-        v.findViewById<View>(R.id.pad_btn_kb).setOnClickListener { onKeyboard() }
-        v.findViewById<View>(R.id.pad_btn_settings).setOnClickListener { onSettings() }
-        v.findViewById<View>(R.id.pad_btn_close).setOnClickListener { onHide() }
-        v.findViewById<View>(R.id.pad_btn_right).setOnClickListener {
-            svc()?.rightClick(cursor.x, cursor.y)
+        v.findViewById<View>(R.id.pad_btn_kb).setOnClickListener {
+            sounds.beep(340)
+            onKeyboard()
+        }
+        v.findViewById<View>(R.id.pad_btn_settings).setOnClickListener {
+            sounds.beep(340)
+            onSettings()
+        }
+        v.findViewById<View>(R.id.pad_btn_close).setOnClickListener {
+            sounds.beep(180)
+            onHide()
         }
 
         bindTitle(v.findViewById(R.id.pad_title))
         bindResize(v.findViewById(R.id.pad_resize))
         bindLeft(v.findViewById(R.id.pad_btn_left))
-        bindWheel(v.findViewById(R.id.pad_wheel))
+        bindWheel(v.findViewById(R.id.pad_wheel_box))
+        bindRight(v.findViewById(R.id.pad_btn_right))
         bindMove(v.findViewById(R.id.pad_move_area))
+        bindContextMenu(v)
     }
 
     private fun bindTitle(t: View) {
@@ -205,6 +281,7 @@ class TouchpadWindow(
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     sx = e.rawX; sy = e.rawY; ox = lp.x; oy = lp.y
+                    closeContextMenu()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val (sw, sh) = screen()
@@ -231,6 +308,7 @@ class TouchpadWindow(
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     sx = e.rawX; sy = e.rawY; w0 = lp.width; h0 = lp.height
+                    closeContextMenu()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val (sw, sh) = screen()
@@ -257,7 +335,8 @@ class TouchpadWindow(
         b.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.alpha = 0.6f
+                    closeContextMenu()
+                    v.alpha = 0.8f
                     if (held) {
                         release()
                         ignoreUp = true
@@ -265,6 +344,7 @@ class TouchpadWindow(
                         ignoreUp = false
                         charging = true
                         chargeStart = SystemClock.uptimeMillis()
+                        sounds.beep(220)
                         handler.post(tick)
                     }
                 }
@@ -273,6 +353,7 @@ class TouchpadWindow(
                     if (!ignoreUp && charging) {
                         stopCharge()
                         svc()?.click(cursor.x, cursor.y)
+                        sounds.beep(180)
                     }
                     ignoreUp = false
                 }
@@ -285,25 +366,99 @@ class TouchpadWindow(
         }
     }
 
+    private fun bindRight(b: View) {
+        b.setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.alpha = 0.8f
+                    if (held) {
+                        sounds.beep(160)
+                        openContextMenu()
+                    } else {
+                        rClickCount++
+                        rClickTimer?.let { handler.removeCallbacks(it) }
+                        if (rClickCount >= 2) {
+                            rClickCount = 0
+                            sounds.beep(160)
+                            openContextMenu()
+                        } else {
+                            sounds.beep(120)
+                            val runner = Runnable {
+                                rClickCount = 0
+                                svc()?.rightClick(cursor.x, cursor.y)
+                            }
+                            rClickTimer = runner
+                            handler.postDelayed(runner, 320)
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    v.alpha = 1f
+                }
+            }
+            true
+        }
+    }
+
+    private fun openContextMenu() {
+        ctxMenu?.visibility = View.VISIBLE
+        ctxMenu?.animate()?.alpha(1f)?.setDuration(120)?.start()
+    }
+
+    private fun closeContextMenu() {
+        ctxMenu?.visibility = View.GONE
+    }
+
+    private fun bindContextMenu(v: View) {
+        val menu = ctxMenu ?: return
+        val actions = listOf(
+            R.id.ctx_undo, R.id.ctx_redo, R.id.ctx_cut,
+            R.id.ctx_copy, R.id.ctx_paste, R.id.ctx_delete, R.id.ctx_select_all
+        )
+        actions.forEach { id ->
+            v.findViewById<View>(id)?.setOnClickListener {
+                sounds.beep(180)
+                closeContextMenu()
+                // Выполняем имитацию контекстного клика
+                svc()?.rightClick(cursor.x, cursor.y)
+            }
+        }
+    }
+
     private fun bindWheel(w: View) {
         var last = 0f
         var acc = 0f
         w.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    last = e.rawY; acc = 0f
+                    closeContextMenu()
+                    last = e.rawY
+                    acc = 0f
+                    lastWheelTick = 0f
                     svc()
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    acc += e.rawY - last
+                    val dy = e.rawY - last
+                    acc += dy
                     last = e.rawY
-                    val step = dp(18).toFloat()
+                    wheelView?.setScrollOffset(dy)
+
+                    if (abs(acc - lastWheelTick) > dp(10)) {
+                        sounds.wheelTick()
+                        lastWheelTick = acc
+                    }
+
+                    val step = dp(16).toFloat()
                     while (abs(acc) >= step) {
                         val dir = if (acc > 0) -1 else 1
                         acc -= step * -dir
+                        lastWheelTick = acc
                         MouseAccessibilityService.instance
                             ?.scroll(cursor.x, cursor.y, dir, dp(120).toFloat())
                     }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // Конец скролла
                 }
             }
             true
@@ -320,8 +475,10 @@ class TouchpadWindow(
         m.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    closeContextMenu()
                     lx = e.rawX; ly = e.rawY; sx = lx; sy = ly
                     t0 = e.eventTime; far = false
+                    cursor.setPressed(true)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val k = getSettings().sensitivity
@@ -331,7 +488,14 @@ class TouchpadWindow(
                     if (held) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (!far && !held && e.eventTime - t0 < 250) svc()?.click(cursor.x, cursor.y)
+                    cursor.setPressed(false)
+                    if (!far && !held && e.eventTime - t0 < 250) {
+                        svc()?.click(cursor.x, cursor.y)
+                        sounds.beep(180)
+                    }
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    cursor.setPressed(false)
                 }
             }
             true

@@ -1,7 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="neon_blue">#00BFFF</color>
-    <color name="neon_dark">#0A1628</color>
-    <color name="bg_dark">#0A0E17</color>
-    <color name="ic_launcher_background">#0A0E17</color>
+    <color name="acc">#2E7BFF</color>
+    <color name="acc_soft">#A4C6FF</color>
+    <color name="acc_glow">#402E7BFF</color>
+    <color name="bg_dark">#05080E</color>
+    <color name="card_hi">#1C293F</color>
+    <color name="card_mid">#111A29</color>
+    <color name="card_lo">#0B1019</color>
+    <color name="well_hi">#121C2C</color>
+    <color name="well">#060A10</color>
+    <color name="key_top">#24344E</color>
+    <color name="key_mid">#192537</color>
+    <color name="key_bot">#0F1722</color>
+    <color name="key_side">#080C12</color>
+    <color name="txt_main">#BAC9DB</color>
+    <color name="txt_dim">#7A8C9E</color>
+    <color name="neon_cyan">#00F0FF</color>
+    <color name="neon_blue">#2E7BFF</color>
+    <color name="neon_dark">#0B1019</color>
+    <color name="ic_launcher_background">#05080E</color>
 </resources>

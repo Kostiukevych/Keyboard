@@ -12,11 +12,18 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.widget.CheckBox
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 
-/** Оверлей-диалог настроек. Изменяет переданный объект settings на месте. */
+/**
+ * Оверлей-диалог настроек в стиле HTML modal box:
+ * Скорость, размер, стиль курсора, 3 палитры по 12 3D-пузырьков neonColors,
+ * переключатель звука и кнопка Готово.
+ */
 @SuppressLint("SetTextI18n")
 class SettingsWindow(
     private val ctx: Context,
@@ -29,14 +36,17 @@ class SettingsWindow(
     private var root: View? = null
     private var attached = false
     private var binding = false
+    private val sounds = SoundManager.get(ctx) { settings.soundOn }
 
-    private val palette = listOf(
-        "#2e7bff", "#00f0ff", "#ff00aa", "#00ff88", "#ffee00", "#ff4400",
-        "#aa00ff", "#ff66cc", "#66ff00", "#ffaa00", "#00ffcc", "#ffffff"
+    private val neonColors = listOf(
+        "#2E7BFF", "#00F0FF", "#FF00AA", "#00FF88", "#FFEE00", "#FF4400",
+        "#AA00FF", "#FF66CC", "#66FF00", "#FFAA00", "#00FFCC", "#FFFFFF"
     ).map { Color.parseColor(it) }
 
     private val styleButtons = ArrayList<TextView>()
     private val palettes = ArrayList<Pair<LinearLayout, () -> Int>>()
+
+    private fun dp(v: Int) = (v * density).toInt()
 
     private fun screenSize(): Pair<Int, Int> {
         val m = ctx.resources.displayMetrics
@@ -48,24 +58,26 @@ class SettingsWindow(
         val v = LayoutInflater.from(themed).inflate(R.layout.dialog_settings, null)
         binding = true
 
-        // Скорость 0.8..4.0
+        // Скорость курсора 0.8 .. 4.0 (шаг 0.1)
         val sbSpeed = v.findViewById<SeekBar>(R.id.sb_speed)
         val tvSpeed = v.findViewById<TextView>(R.id.tv_speed)
+        sbSpeed.max = 32
         sbSpeed.progress = Math.round((settings.sensitivity - 0.8f) * 10f).coerceIn(0, 32)
-        tvSpeed.text = ctx.getString(R.string.set_speed) + ": " + String.format("%.1f", settings.sensitivity)
+        tvSpeed.text = String.format("%.1f×", settings.sensitivity)
         sbSpeed.setOnSeekBarChangeListener(seek { p ->
             settings.sensitivity = 0.8f + p / 10f
-            tvSpeed.text = ctx.getString(R.string.set_speed) + ": " + String.format("%.1f", settings.sensitivity)
+            tvSpeed.text = String.format("%.1f×", settings.sensitivity)
         })
 
-        // Размер курсора 24..96
+        // Размер курсора 32 .. 64 px
         val sbSize = v.findViewById<SeekBar>(R.id.sb_size)
         val tvSize = v.findViewById<TextView>(R.id.tv_size)
-        sbSize.progress = (settings.cursorSizeDp - 24).coerceIn(0, 72)
-        tvSize.text = ctx.getString(R.string.set_size) + ": " + settings.cursorSizeDp + " dp"
+        sbSize.max = 32
+        sbSize.progress = (settings.cursorSizeDp - 32).coerceIn(0, 32)
+        tvSize.text = "${settings.cursorSizeDp} px"
         sbSize.setOnSeekBarChangeListener(seek { p ->
-            settings.cursorSizeDp = 24 + p
-            tvSize.text = ctx.getString(R.string.set_size) + ": " + settings.cursorSizeDp + " dp"
+            settings.cursorSizeDp = 32 + p
+            tvSize.text = "${settings.cursorSizeDp} px"
         })
 
         // Стиль курсора
@@ -74,6 +86,7 @@ class SettingsWindow(
             val b = v.findViewById<TextView>(id)
             styleButtons.add(b)
             b.setOnClickListener {
+                sounds.beep(340)
                 settings.cursorStyle = i
                 refreshStyle()
                 onChanged()
@@ -81,14 +94,22 @@ class SettingsWindow(
         }
         refreshStyle()
 
-        // Палитры
+        // 3D-палитры Bubble (12 цветов в 2 ряда по 6)
         palettes.clear()
-        addPalette(v.findViewById(R.id.pal_cursor), { settings.cursorColor }) { settings.cursorColor = it }
-        addPalette(v.findViewById(R.id.pal_glow), { settings.glowColor }) { settings.glowColor = it }
-        addPalette(v.findViewById(R.id.pal_pad), { settings.padColor }) { settings.padColor = it }
-        addPalette(v.findViewById(R.id.pal_key), { settings.keyGlowColor }) { settings.keyGlowColor = it }
+        addBubblePalette(v.findViewById(R.id.pal_cursor), { settings.cursorColor }) {
+            settings.cursorColor = it
+        }
+        addBubblePalette(v.findViewById(R.id.pal_pad), { settings.padColor }) {
+            settings.padColor = it
+            // При изменении цвета корпуса подтягиваем подсветку по умолчанию
+            settings.keyGlowColor = it
+            refreshPalettes()
+        }
+        addBubblePalette(v.findViewById(R.id.pal_key), { settings.keyGlowColor }) {
+            settings.keyGlowColor = it
+        }
 
-        // Размер тачпада
+        // Размеры тачпада
         val (sw, sh) = screenSize()
         val maxW = (sw / density).toInt().coerceAtLeast(220)
         val maxH = (sh / density).toInt().coerceAtLeast(160)
@@ -96,148 +117,152 @@ class SettingsWindow(
         val tvW = v.findViewById<TextView>(R.id.tv_pad_w)
         sbW.max = maxW - 220
         sbW.progress = (settings.padWidthDp - 220).coerceIn(0, maxW - 220)
-        tvW.text = ctx.getString(R.string.set_pad_w) + ": " + settings.padWidthDp + " dp"
+        tvW.text = "${settings.padWidthDp} dp"
         sbW.setOnSeekBarChangeListener(seek { p ->
             settings.padWidthDp = 220 + p
-            tvW.text = ctx.getString(R.string.set_pad_w) + ": " + settings.padWidthDp + " dp"
+            tvW.text = "${settings.padWidthDp} dp"
         })
+
         val sbH = v.findViewById<SeekBar>(R.id.sb_pad_h)
         val tvH = v.findViewById<TextView>(R.id.tv_pad_h)
         sbH.max = maxH - 160
         sbH.progress = (settings.padHeightDp - 160).coerceIn(0, maxH - 160)
-        tvH.text = ctx.getString(R.string.set_pad_h) + ": " + settings.padHeightDp + " dp"
+        tvH.text = "${settings.padHeightDp} dp"
         sbH.setOnSeekBarChangeListener(seek { p ->
             settings.padHeightDp = 160 + p
-            tvH.text = ctx.getString(R.string.set_pad_h) + ": " + settings.padHeightDp + " dp"
+            tvH.text = "${settings.padHeightDp} dp"
         })
 
-        // Звук
-        val cb = v.findViewById<CheckBox>(R.id.cb_sound)
-        cb.isChecked = settings.soundOn
-        cb.setOnCheckedChangeListener { _, checked ->
-            if (binding) return@setOnCheckedChangeListener
+        // Звук нажатий
+        val cbSound = v.findViewById<CheckBox>(R.id.cb_sound)
+        cbSound.isChecked = settings.soundOn
+        cbSound.setOnCheckedChangeListener { _, checked ->
             settings.soundOn = checked
+            sounds.beep(if (checked) 380 else 180)
             onChanged()
         }
 
+        // Кнопка Готово
         v.findViewById<View>(R.id.btn_done).setOnClickListener {
-            onSave()
-            hide()
+            sounds.beep(180)
+            saveAndClose()
         }
-        v.findViewById<View>(R.id.btn_close).setOnClickListener {
-            rollback()
-            hide()
-        }
+
         binding = false
+        refreshPalettes()
         return v
     }
 
-    private fun seek(update: (Int) -> Unit) = object : SeekBar.OnSeekBarChangeListener {
-        override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-            if (binding || !fromUser) return
-            update(progress)
-            onChanged()
-        }
-
-        override fun onStartTrackingTouch(sb: SeekBar?) {}
-        override fun onStopTrackingTouch(sb: SeekBar?) {}
-    }
-
-    private fun refreshStyle() {
-        styleButtons.forEachIndexed { i, b ->
-            b.setTextColor(if (i == settings.cursorStyle) Color.WHITE else Color.parseColor("#00BFFF"))
-            b.alpha = if (i == settings.cursorStyle) 1f else 0.6f
-        }
-    }
-
-    private fun addPalette(container: LinearLayout, current: () -> Int, set: (Int) -> Unit) {
+    private fun addBubblePalette(container: LinearLayout, getCur: () -> Int, setCur: (Int) -> Unit) {
         container.removeAllViews()
-        val perRow = 6
-        val sizePx = (34 * density).toInt()
-        val margin = (3 * density).toInt()
-        palette.chunked(perRow).forEach { chunk ->
-            val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-            chunk.forEach { color ->
-                val sw = View(ctx)
-                sw.layoutParams = LinearLayout.LayoutParams(0, sizePx, 1f).apply {
-                    setMargins(margin, margin, margin, margin)
+        palettes.add(Pair(container, getCur))
+
+        // 2 ряда по 6 пузырьков
+        neonColors.chunked(6).forEach { rowColors ->
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, dp(3), 0, dp(3)) }
+            }
+
+            rowColors.forEach { c ->
+                val bubble = FrameLayout(ctx).apply {
+                    val size = dp(34)
+                    layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                        setMargins(dp(5), 0, dp(5), 0)
+                    }
+                    tag = c
+
+                    // Внутренний шар с 3D-градиентом
+                    background = createBubbleDrawable(c, c == getCur())
+
+                    setOnClickListener {
+                        sounds.beep(420)
+                        setCur(c)
+                        refreshPalettes()
+                        onChanged()
+                    }
                 }
-                sw.tag = color
-                sw.setOnClickListener {
-                    set(color)
-                    refreshPalettes()
-                    onChanged()
-                }
-                row.addView(sw)
+                row.addView(bubble)
             }
             container.addView(row)
         }
-        palettes.add(Pair(container, current))
-        refreshPalettes()
+    }
+
+    private fun createBubbleDrawable(color: Int, isSelected: Boolean): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            colors = intArrayOf(
+                ColorUtils.blendARGB(color, Color.WHITE, 0.4f),
+                color,
+                ColorUtils.blendARGB(color, Color.BLACK, 0.5f)
+            )
+            gradientType = GradientDrawable.RADIAL_GRADIENT
+            gradientRadius = dp(24).toFloat()
+            if (isSelected) {
+                setStroke(dp(3), Color.WHITE)
+            } else {
+                setStroke(dp(1), ColorUtils.setAlphaComponent(Color.WHITE, 0x66))
+            }
+        }
     }
 
     private fun refreshPalettes() {
-        for ((container, current) in palettes) {
-            val cur = current()
-            for (r in 0 until container.childCount) {
-                val row = container.getChildAt(r) as LinearLayout
-                for (i in 0 until row.childCount) {
-                    val sw = row.getChildAt(i)
-                    val color = sw.tag as Int
-                    sw.background = GradientDrawable().apply {
-                        shape = GradientDrawable.RECTANGLE
-                        cornerRadius = 8 * density
-                        setColor(color)
-                        if ((color or 0xFF000000.toInt()) == (cur or 0xFF000000.toInt())) {
-                            setStroke((3 * density).toInt(), Color.WHITE)
-                        } else {
-                            setStroke((1 * density).toInt(), Color.parseColor("#55FFFFFF"))
-                        }
-                    }
+        palettes.forEach { (box, getCur) ->
+            val cur = getCur()
+            for (i in 0 until box.childCount) {
+                val row = box.getChildAt(i) as? LinearLayout ?: continue
+                for (j in 0 until row.childCount) {
+                    val bubble = row.getChildAt(j) as? FrameLayout ?: continue
+                    val c = bubble.tag as? Int ?: continue
+                    val selected = c == cur
+                    bubble.background = createBubbleDrawable(c, selected)
+                    bubble.scaleX = if (selected) 1.15f else 1.0f
+                    bubble.scaleY = if (selected) 1.15f else 1.0f
                 }
             }
         }
     }
 
-    /** «Закрыть»: вернуть значения, сохранённые в PreferenceHelper. */
-    private fun rollback() {
-        val o = PreferenceHelper.load(ctx)
-        settings.sensitivity = o.sensitivity
-        settings.cursorSizeDp = o.cursorSizeDp
-        settings.cursorColor = o.cursorColor
-        settings.cursorStyle = o.cursorStyle
-        settings.glowColor = o.glowColor
-        settings.padWidthDp = o.padWidthDp
-        settings.padHeightDp = o.padHeightDp
-        settings.padX = o.padX
-        settings.padY = o.padY
-        settings.padLocked = o.padLocked
-        settings.buttonX = o.buttonX
-        settings.buttonY = o.buttonY
-        settings.padColor = o.padColor
-        settings.keyGlowColor = o.keyGlowColor
-        settings.soundOn = o.soundOn
-        settings.language = o.language
-        onChanged()
+    private fun refreshStyle() {
+        val s = settings.cursorStyle
+        styleButtons.forEachIndexed { i, b ->
+            val sel = i == s
+            b.isSelected = sel
+            b.setTextColor(if (sel) Color.WHITE else Color.parseColor("#7A8C9E"))
+        }
+    }
+
+    private fun seek(onProg: (Int) -> Unit) = object : SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+            if (!fromUser || binding) return
+            onProg(p)
+            onChanged()
+        }
+        override fun onStartTrackingTouch(sb: SeekBar?) {}
+        override fun onStopTrackingTouch(sb: SeekBar?) {}
     }
 
     fun show() {
         if (attached) return
         val v = build()
+        root = v
         val (sw, sh) = screenSize()
-        val w = minOf((360 * density).toInt(), sw - (24 * density).toInt())
-        val h = (sh * 0.8f).toInt()
         val lp = WindowManager.LayoutParams(
-            w, h,
-            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            (sw * 0.92f).toInt().coerceAtMost(dp(380)),
+            (sh * 0.85f).toInt(),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
-        )
-        lp.gravity = Gravity.CENTER
+        ).apply {
+            gravity = Gravity.CENTER
+        }
         try {
             wm.addView(v, lp)
-            root = v
             attached = true
         } catch (_: Exception) {
         }
@@ -245,11 +270,18 @@ class SettingsWindow(
 
     fun hide() {
         if (!attached) return
-        try {
-            wm.removeView(root)
-        } catch (_: Exception) {
+        root?.let {
+            try {
+                wm.removeView(it)
+            } catch (_: Exception) {
+            }
         }
         root = null
         attached = false
+    }
+
+    private fun saveAndClose() {
+        onSave()
+        hide()
     }
 }

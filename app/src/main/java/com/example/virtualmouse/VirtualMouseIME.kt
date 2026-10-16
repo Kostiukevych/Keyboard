@@ -2,15 +2,16 @@ package com.example.virtualmouse
 
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
-import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.view.ContextThemeWrapper
 import android.view.Gravity
@@ -28,18 +29,22 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import com.example.virtualmouse.KeyboardLayouts.Key
 
-/** Системная клавиатура на всю ширину экрана. Текст вводится через InputConnection. */
+/**
+ * Системная клавиатура Virtual Mouse с 3D-клавишами, стеклянными переключателями,
+ * неоновой подсветкой и звуковым движком Web Audio API.
+ */
 class VirtualMouseIME : InputMethodService() {
 
     private companion object {
         val REPEAT = setOf("BKSP", "UP", "DOWN", "LEFT", "RIGHT")
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
-        const val TEXT = 0xFFE0F7FF.toInt()
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private var settings = CursorSettings()
     private lateinit var clip: AppClipboardManager
+    private lateinit var sounds: SoundManager
+
     private var root: View? = null
     private var rowsBox: LinearLayout? = null
     private val keyViews = ArrayList<Pair<TextView, Key>>()
@@ -64,6 +69,7 @@ class VirtualMouseIME : InputMethodService() {
         super.onCreate()
         settings = PreferenceHelper.load(this)
         clip = AppClipboardManager(this)
+        sounds = SoundManager.get(this) { settings.soundOn }
     }
 
     override fun onEvaluateFullscreenMode() = false
@@ -73,16 +79,38 @@ class VirtualMouseIME : InputMethodService() {
             .inflate(R.layout.ime_keyboard, null)
         root = v
         rowsBox = v.findViewById(R.id.kb_rows)
-        v.findViewById<View>(R.id.kb_btn_lang).setOnClickListener { cycleLang() }
-        v.findViewById<View>(R.id.kb_btn_clip).setOnClickListener { showClip() }
+        v.findViewById<View>(R.id.kb_btn_lang).setOnClickListener {
+            cycleLang()
+        }
+        v.findViewById<View>(R.id.kb_btn_clip).setOnClickListener {
+            sounds.beep(300)
+            showClip()
+        }
         v.findViewById<View>(R.id.kb_btn_settings).setOnClickListener {
+            sounds.beep(340)
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-        v.findViewById<View>(R.id.kb_btn_hide).setOnClickListener { requestHideSelf(0) }
-        v.findViewById<View>(R.id.kb_clip_close).setOnClickListener { hideClip() }
-        v.findViewById<View>(R.id.kb_clip_copy).setOnClickListener { clipCopy() }
-        v.findViewById<View>(R.id.kb_clip_sys).setOnClickListener { clipSystem() }
-        v.findViewById<View>(R.id.kb_clip_clear).setOnClickListener { clip.clear(); fillClip() }
+        v.findViewById<View>(R.id.kb_btn_hide).setOnClickListener {
+            sounds.beep(180)
+            requestHideSelf(0)
+        }
+        v.findViewById<View>(R.id.kb_clip_close).setOnClickListener {
+            sounds.beep(180)
+            hideClip()
+        }
+        v.findViewById<View>(R.id.kb_clip_copy).setOnClickListener {
+            sounds.beep(260)
+            clipCopy()
+        }
+        v.findViewById<View>(R.id.kb_clip_sys).setOnClickListener {
+            sounds.beep(260)
+            clipSystem()
+        }
+        v.findViewById<View>(R.id.kb_clip_clear).setOnClickListener {
+            sounds.beep(180)
+            clip.clear()
+            fillClip()
+        }
         refreshAll()
         return v
     }
@@ -110,23 +138,19 @@ class VirtualMouseIME : InputMethodService() {
         applyColors()
         applySize()
         val lang = settings.language.coerceIn(0, 2)
-        root?.findViewById<TextView>(R.id.kb_btn_lang)?.text = arrayOf("ENG", "РУС", "UKR")[lang]
+        val langNames = arrayOf("ENG", "РУС", "UKR")
+        root?.findViewById<TextView>(R.id.kb_btn_lang)?.text = langNames[lang]
         showLayer(layer)
     }
 
     private fun applyColors() {
         val v = root ?: return
-        (ContextCompat.getDrawable(this, R.drawable.bg_kb_body)?.mutate() as? GradientDrawable)?.let {
-            it.setStroke(dp(2), settings.padColor)
+        (ContextCompat.getDrawable(this, R.drawable.bg_card_platform)?.mutate() as? GradientDrawable)?.let {
+            it.setStroke(dp(1), settings.padColor)
             v.background = it
-        }
-        (ContextCompat.getDrawable(this, R.drawable.bg_kb_panel)?.mutate() as? GradientDrawable)?.let {
-            it.setStroke(dp(2), settings.padColor)
-            v.findViewById<View>(R.id.kb_clip_panel).background = it
         }
     }
 
-    /** Высота: 42% экрана в портрете, 55% в ландшафте, максимум 400dp; F-ряд скрыт при ширине < 600dp. */
     private fun applySize() {
         val v = root ?: return
         val dm = resources.displayMetrics
@@ -146,6 +170,7 @@ class VirtualMouseIME : InputMethodService() {
         s.language = (settings.language + 1) % 3
         PreferenceHelper.save(this, s)
         settings.language = s.language
+        sounds.beep(if (s.language == 1) 380 else 520)
         refreshAll()
     }
 
@@ -157,7 +182,7 @@ class VirtualMouseIME : InputMethodService() {
         stopRepeat()
         keyViews.clear()
         box.removeAllViews()
-        val h = totalH - dp(44)
+        val h = totalH - dp(46)
         if (name == KeyboardLayouts.L_EMOJI || name == KeyboardLayouts.L_UNICODE) {
             buildGrid(box, name, h)
         } else {
@@ -174,29 +199,46 @@ class VirtualMouseIME : InputMethodService() {
         return row
     }
 
+    private fun isGlassKey(k: Key): Boolean {
+        return k.code.startsWith("L:") || k.code in setOf(
+            "ESC", "TAB", "CAPS", "ENTER", "SPACE", "CLIP", "WIN", "CTRL", "ALT", "SHIFT"
+        )
+    }
+
     private fun makeKey(k: Key): TextView {
-        val base = (rowH / density / 2.6f).coerceIn(9f, 17f)
+        val base = (rowH / density / 2.6f).coerceIn(9f, 16f)
         val t = TextView(this)
-        t.layoutParams = LinearLayout.LayoutParams(0, MATCH, k.weight).apply { setMargins(dp(1), dp(1), dp(1), dp(1)) }
+        t.layoutParams = LinearLayout.LayoutParams(0, MATCH, k.weight).apply {
+            setMargins(dp(1), dp(1), dp(1), dp(1))
+        }
         t.gravity = Gravity.CENTER
         t.includeFontPadding = false
         t.maxLines = 2
         t.textSize = if (k.label.length > 2) base * 0.75f else base
+
+        val isGlass = isGlassKey(k)
+        t.background = ContextCompat.getDrawable(
+            this,
+            if (isGlass) R.drawable.bg_glass_button else R.drawable.bg_3d_key
+        )
+
+        val glowSoft = ColorUtils.blendARGB(settings.keyGlowColor, Color.WHITE, 0.55f)
         if (k.code.isEmpty() && k.text.firstOrNull()?.isLetterOrDigit() == true) {
-            t.setTextColor(settings.keyGlowColor)
-            t.setShadowLayer(dp(4).toFloat(), 0f, 0f, settings.keyGlowColor)
+            t.setTextColor(glowSoft)
+            t.setShadowLayer(dp(5).toFloat(), 0f, 0f, settings.keyGlowColor)
         } else {
-            t.setTextColor(TEXT)
+            t.setTextColor(Color.WHITE)
         }
+
         t.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.alpha = 0.6f
+                    v.isPressed = true
                     press(k)
                     if (k.code in REPEAT) startRepeat(k)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.alpha = 1f
+                    v.isPressed = false
                     stopRepeat()
                 }
             }
@@ -206,7 +248,6 @@ class VirtualMouseIME : InputMethodService() {
         return t
     }
 
-    /** Emoji и Unicode: прокручиваемая сетка + нижний ряд. Вставка по клику, чтобы не мешать прокрутке. */
     private fun buildGrid(box: LinearLayout, name: String, h: Int) {
         rowH = h / 6
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -216,17 +257,17 @@ class VirtualMouseIME : InputMethodService() {
             if (title.isNotEmpty()) {
                 content.addView(TextView(this).apply {
                     text = title
-                    textSize = 13f
-                    setTextColor(0xFF00BFFF.toInt())
-                    setPadding(dp(6), dp(6), 0, dp(2))
+                    textSize = 12f
+                    setTextColor(ColorUtils.blendARGB(settings.keyGlowColor, Color.WHITE, 0.4f))
+                    setPadding(dp(8), dp(6), 0, dp(4))
                 })
             }
             val bidi = title == KeyboardLayouts.BIDI_TITLE
-            val cols = (resources.displayMetrics.widthPixels / density / (if (bidi) 70 else 44)).toInt().coerceAtLeast(4)
+            val cols = (resources.displayMetrics.widthPixels / density / (if (bidi) 64 else 42)).toInt().coerceAtLeast(4)
             keys.chunked(cols).forEach { chunk ->
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
                 chunk.forEach { row.addView(cell(it, bidi)) }
-                for (i in chunk.size until cols) row.addView(View(this), LinearLayout.LayoutParams(0, dp(44), 1f))
+                for (i in chunk.size until cols) row.addView(View(this), LinearLayout.LayoutParams(0, dp(42), 1f))
                 content.addView(row)
             }
         }
@@ -237,13 +278,20 @@ class VirtualMouseIME : InputMethodService() {
     private fun cell(k: Key, small: Boolean) = TextView(this).apply {
         text = k.label
         gravity = Gravity.CENTER
-        setTextColor(TEXT)
+        setTextColor(ColorUtils.blendARGB(settings.keyGlowColor, Color.WHITE, 0.6f))
         textSize = if (small) 12f else 22f
-        layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f)
-        setOnClickListener { sound(""); commit(k.text) }
+        background = ContextCompat.getDrawable(
+            this@VirtualMouseIME,
+            if (small) R.drawable.bg_glass_button else R.drawable.bg_3d_key
+        )
+        layoutParams = LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+            setMargins(dp(1), dp(1), dp(1), dp(1))
+        }
+        setOnClickListener {
+            sounds.beep(if (small) 500 else 420)
+            commit(k.text)
+        }
     }
-
-    // ---------- Оформление клавиш ----------
 
     private fun isActive(k: Key) = when (k.code) {
         "CTRL" -> ctrl
@@ -252,15 +300,6 @@ class VirtualMouseIME : InputMethodService() {
         "SHIFT" -> shiftOnce || caps
         "CAPS" -> caps
         else -> false
-    }
-
-    private fun keyBg(active: Boolean): Drawable {
-        if (active) ContextCompat.getDrawable(this, R.drawable.bg_key_active)?.mutate()?.let { return it }
-        return GradientDrawable().apply {
-            cornerRadius = dp(7).toFloat()
-            setColor(ColorUtils.setAlphaComponent(settings.padColor, 0x22))
-            setStroke(dp(1), ColorUtils.setAlphaComponent(settings.padColor, 0xAA))
-        }
     }
 
     private fun outText(k: Key) =
@@ -272,23 +311,24 @@ class VirtualMouseIME : InputMethodService() {
         if (k.code.isNotEmpty() || k.text != k.label) return k.label
         val main = outText(k)
         if (!small || k.latin.isEmpty() || k.latin == k.label) return main
-        return SpannableString(main + "\n" + k.latin).apply {
-            setSpan(RelativeSizeSpan(0.55f), main.length + 1, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
+        val ss = SpannableString(main + "\n" + k.latin.uppercase())
+        ss.setSpan(RelativeSizeSpan(0.6f), main.length + 1, ss.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        ss.setSpan(ForegroundColorSpan(Color.parseColor("#7A8C9E")), main.length + 1, ss.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return ss
     }
 
     private fun refreshKeys() {
         val small = rowH >= dp(38) && settings.language != 0 && layer == KeyboardLayouts.L_LETTERS
         for ((v, k) in keyViews) {
             v.text = labelOf(k, small)
-            v.background = keyBg(isActive(k))
+            v.isSelected = isActive(k)
         }
     }
 
     // ---------- Нажатия ----------
 
     private fun press(k: Key, snd: Boolean = true) {
-        if (snd) sound(k.code)
+        if (snd) playSoundForKey(k)
         when (k.code) {
             "" -> typeText(k)
             "SHIFT" -> toggleShift()
@@ -309,6 +349,20 @@ class VirtualMouseIME : InputMethodService() {
                 sendKey(codeOf(k.code))
                 afterKey()
             }
+        }
+    }
+
+    private fun playSoundForKey(k: Key) {
+        when {
+            k.code.startsWith("L:emoji") -> sounds.beep(420)
+            k.code.startsWith("L:unicode") -> sounds.beep(500)
+            k.code.startsWith("L:") -> sounds.beep(340)
+            k.code in setOf("CTRL", "ALT", "SHIFT", "WIN", "CAPS") -> sounds.beep(220)
+            k.code == "BKSP" -> sounds.beep(200)
+            k.code == "SPACE" -> sounds.beep(240)
+            k.code == "ENTER" -> sounds.beep(300)
+            k.code == "CLIP" -> sounds.beep(300)
+            else -> sounds.beep(260)
         }
     }
 
@@ -351,7 +405,6 @@ class VirtualMouseIME : InputMethodService() {
         }
     }
 
-    /** Ctrl+C/V/X/A/Z: KeyEvent с META_CTRL_ON, запасной вариант performContextMenuAction. */
     private fun shortcut(ch: Char, code: Int) {
         if (sendKey(code)) return
         val id = when (ch) {
@@ -378,20 +431,18 @@ class VirtualMouseIME : InputMethodService() {
         var m = 0
         if (ctrl) m = m or KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
         if (alt) m = m or KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON
-        if (shiftOnce) m = m or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
-        if (win) m = m or KeyEvent.META_META_ON or KeyEvent.META_META_LEFT_ON
-        if (caps) m = m or KeyEvent.META_CAPS_LOCK_ON
+        if (shiftOnce || caps) m = m or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
         return m
     }
 
     private fun sendKey(code: Int): Boolean {
         if (code == 0) return false
         val ic = currentInputConnection ?: return false
-        val now = SystemClock.uptimeMillis()
         val m = meta()
-        val d = ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0, m))
-        val u = ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0, m))
-        return d && u
+        val now = SystemClock.uptimeMillis()
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0, m))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0, m))
+        return true
     }
 
     private fun codeOf(c: String): Int = when (c) {
@@ -450,19 +501,6 @@ class VirtualMouseIME : InputMethodService() {
         repeatRun = null
     }
 
-    private fun sound(code: String) {
-        if (!settings.soundOn) return
-        val am = getSystemService(AUDIO_SERVICE) as AudioManager
-        am.playSoundEffect(
-            when (code) {
-                "SPACE" -> AudioManager.FX_KEYPRESS_SPACEBAR
-                "ENTER" -> AudioManager.FX_KEYPRESS_RETURN
-                "BKSP" -> AudioManager.FX_KEYPRESS_DELETE
-                else -> AudioManager.FX_KEYPRESS_STANDARD
-            }
-        )
-    }
-
     // ---------- Буфер обмена ----------
 
     private fun showClip() {
@@ -484,7 +522,7 @@ class VirtualMouseIME : InputMethodService() {
         if (items.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = "История пуста"
-                setTextColor(0xFF8AA7B8.toInt())
+                setTextColor(Color.parseColor("#7A8C9E"))
                 setPadding(dp(8), dp(8), dp(8), dp(8))
             })
         }
@@ -493,10 +531,10 @@ class VirtualMouseIME : InputMethodService() {
                 text = item.text.replace('\n', ' ').take(160)
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
-                setTextColor(TEXT)
-                textSize = 14f
+                setTextColor(Color.WHITE)
+                textSize = 13f
                 setPadding(dp(10), dp(8), dp(10), dp(8))
-                background = keyBg(false)
+                background = ContextCompat.getDrawable(this@VirtualMouseIME, R.drawable.bg_glass_button)
                 layoutParams = LinearLayout.LayoutParams(MATCH, ViewGroup.LayoutParams.WRAP_CONTENT)
                     .apply { setMargins(dp(2), dp(2), dp(2), dp(2)) }
                 setOnClickListener { commit(item.text); hideClip() }

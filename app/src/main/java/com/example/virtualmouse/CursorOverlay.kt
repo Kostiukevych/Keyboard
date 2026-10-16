@@ -13,6 +13,11 @@ import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
 
+/**
+ * Оверлей курсора мыши.
+ * Поддерживает 3D-стрелку из HTML-дизайна, свечение, выбор размера,
+ * цвета и анимацию нажатия (pressed 0.88x).
+ */
 class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
     var x: Float = 0f
@@ -91,9 +96,12 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         val blur = Paint().apply { maskFilter = BlurMaskFilter(pad * 0.6f, BlurMaskFilter.Blur.NORMAL) }
         val glow = full.extractAlpha(blur, null)
         if (s.cursorStyle == 0) {
-            hotX = pad; hotY = pad
+            // Точка острия стрелки (22.5%, 19.4%)
+            hotX = pad + (size * 0.225f).toInt()
+            hotY = pad + (size * 0.194f).toInt()
         } else {
-            hotX = pad + size / 2; hotY = pad + size / 2
+            hotX = pad + size / 2
+            hotY = pad + size / 2
         }
         val v = view ?: CursorView(ctx).also { view = it }
         v.icon?.recycle()
@@ -102,6 +110,8 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         v.glow = glow
         v.total = total
         v.glowPaint.color = s.glowColor
+        v.pivotX = hotX.toFloat()
+        v.pivotY = hotY.toFloat()
         lp.width = total
         lp.height = total
         v.requestLayout()
@@ -115,9 +125,15 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         if (shown) {
             try {
                 wm.updateViewLayout(view, lp)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
+    }
+
+    fun setPressed(pressed: Boolean) {
+        val v = view ?: return
+        val targetScale = if (pressed) 0.88f else 1.0f
+        v.animate().scaleX(targetScale).scaleY(targetScale).setDuration(80).start()
     }
 
     fun show() {
@@ -126,7 +142,7 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
             update()
             wm.addView(view, lp)
             shown = true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -134,7 +150,7 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         if (!shown) return
         try {
             wm.removeView(view)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
         shown = false
     }
@@ -164,7 +180,7 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         try {
             wm.removeView(view)
             wm.addView(view, lp)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             shown = false
         }
     }

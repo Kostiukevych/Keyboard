@@ -3,63 +3,87 @@
     android:id="@+id/kb_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_kb_body">
+    android:background="@drawable/bg_card_platform">
 
     <!-- Высоту kb_main задаёт VirtualMouseIME (42% / 55% экрана, максимум 400dp) -->
     <LinearLayout
         android:id="@+id/kb_main"
         android:layout_width="match_parent"
-        android:layout_height="300dp"
+        android:layout_height="320dp"
         android:orientation="vertical"
-        android:padding="3dp">
+        android:paddingStart="4dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="6dp">
 
+        <!-- Верхняя стеклянная планка управления (.kb-top) -->
         <LinearLayout
             android:id="@+id/kb_bar"
             android:layout_width="match_parent"
-            android:layout_height="38dp"
-            android:orientation="horizontal">
+            android:layout_height="36dp"
+            android:layout_marginBottom="4dp"
+            android:background="#20000000"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp">
 
             <TextView
                 android:id="@+id/kb_btn_lang"
                 style="@style/BarKeyStyle"
-                android:layout_width="64dp"
-                android:layout_height="match_parent"
-                android:text="РУС" />
+                android:layout_width="60dp"
+                android:layout_height="30dp"
+                android:text="РУС"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/kb_btn_clip"
                 style="@style/BarKeyStyle"
-                android:layout_width="48dp"
-                android:layout_height="match_parent"
+                android:layout_width="40dp"
+                android:layout_height="30dp"
                 android:text="📋"
-                android:visibility="gone" />
+                android:textSize="13sp" />
 
-            <View
+            <TextView
+                android:id="@+id/kb_status_text"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1" />
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="Virtual Mouse Keyboard"
+                android:textColor="@color/txt_dim"
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/kb_btn_settings"
                 style="@style/BarKeyStyle"
-                android:layout_width="48dp"
-                android:layout_height="match_parent"
-                android:text="⚙" />
+                android:layout_width="40dp"
+                android:layout_height="30dp"
+                android:text="⚙"
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/kb_btn_hide"
                 style="@style/BarKeyStyle"
-                android:layout_width="48dp"
-                android:layout_height="match_parent"
-                android:text="⌄" />
+                android:layout_width="40dp"
+                android:layout_height="30dp"
+                android:text="⌄"
+                android:textSize="14sp" />
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/kb_rows"
+        <!-- Контейнер для строк клавиатуры или скролл-сеток -->
+        <FrameLayout
+            android:id="@+id/kb_content"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:orientation="vertical" />
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:id="@+id/kb_rows"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical" />
+        </FrameLayout>
     </LinearLayout>
 
     <!-- Панель истории буфера обмена -->
@@ -67,16 +91,16 @@
         android:id="@+id/kb_clip_panel"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@drawable/bg_kb_panel"
+        android:background="@drawable/bg_card_platform"
         android:clickable="true"
         android:focusable="true"
         android:orientation="vertical"
-        android:padding="6dp"
+        android:padding="8dp"
         android:visibility="gone">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:orientation="horizontal">
 
             <TextView
@@ -85,15 +109,17 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center_vertical"
-                android:paddingStart="6dp"
-                android:textColor="#00BFFF"
-                android:textSize="14sp" />
+                android:paddingStart="8dp"
+                android:text="Буфер обмена"
+                android:textColor="@color/acc_soft"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/kb_clip_close"
                 style="@style/BarKeyStyle"
-                android:layout_width="48dp"
-                android:layout_height="match_parent"
+                android:layout_width="36dp"
+                android:layout_height="32dp"
                 android:text="✕" />
         </LinearLayout>
 
@@ -111,8 +137,9 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:orientation="horizontal">
+            android:layout_height="40dp"
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
 
             <TextView
                 android:id="@+id/kb_clip_copy"
@@ -128,7 +155,7 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1.6"
-                android:text="Из системного буфера" />
+                android:text="Из системы" />
 
             <TextView
                 android:id="@+id/kb_clip_clear"

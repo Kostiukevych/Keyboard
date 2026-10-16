@@ -1,13 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="32dp"
-    android:height="32dp"
-    android:viewportWidth="32"
-    android:viewportHeight="32">
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Тело стрелки (основной цвет) -->
     <path
-        android:fillColor="#00BFFF"
-        android:pathData="M0,0 L0,24 L6,18 L10.5,28 L14,26.5 L9.5,16.5 L18,16.5 Z"
-        android:strokeColor="#0A0E17"
-        android:strokeWidth="1"
+        android:name="cursor_body"
+        android:pathData="M22.5,19.4 L80.5,44.6 Q86,47 80.4,49.2 L61.7,56.5 Q58,58 56.1,61.5 L45.8,80.7 Q43,86 40.9,80.4 L19.1,22.6 Q17,17 22.5,19.4 Z"
+        android:fillColor="#00F0FF" />
+
+    <!-- Нижняя грань (затенение для 3D) -->
+    <path
+        android:pathData="M22.5,19.4 L61.7,56.5 Q58,58 56.1,61.5 L45.8,80.7 Q43,86 40.9,80.4 L19.1,22.6 Q17,17 22.5,19.4 Z"
+        android:fillColor="#44000000" />
+
+    <!-- Верхняя грань (световой блик) -->
+    <path
+        android:pathData="M22.5,19.4 L80.5,44.6 Q86,47 80.4,49.2 L61.7,56.5 Z"
+        android:fillColor="#33FFFFFF" />
+
+    <!-- Линия блеска -->
+    <path
+        android:pathData="M26,21.4 L76.5,43.2"
+        android:strokeColor="#DDFFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round" />
+
+    <!-- Тёмная окантовка стрелки -->
+    <path
+        android:pathData="M22.5,19.4 L80.5,44.6 Q86,47 80.4,49.2 L61.7,56.5 Q58,58 56.1,61.5 L45.8,80.7 Q43,86 40.9,80.4 L19.1,22.6 Q17,17 22.5,19.4 Z"
+        android:strokeColor="#CC003A40"
+        android:strokeWidth="1.2"
         android:strokeLineJoin="round" />
 </vector>

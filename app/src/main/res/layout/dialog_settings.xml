@@ -2,17 +2,18 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_neon_panel"
+    android:background="@drawable/bg_card_platform"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="16dp">
 
+    <!-- Заголовок модального окна (.box h3) -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
-        android:text="@string/set_title"
-        android:textColor="@color/neon_blue"
-        android:textSize="18sp"
+        android:layout_marginBottom="12dp"
+        android:text="Настройки"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
     <ScrollView
@@ -26,195 +27,329 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/tv_speed"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/set_speed"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
-
-            <SeekBar
-                android:id="@+id/sb_speed"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:max="32" />
-
-            <TextView
-                android:id="@+id/tv_size"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/set_size"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
-
-            <SeekBar
-                android:id="@+id/sb_size"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:max="72" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="@string/set_style"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
-
+            <!-- Секция: Тачпад (.sec) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_touchpad_well"
+                android:orientation="vertical"
+                android:padding="12dp">
 
                 <TextView
-                    android:id="@+id/st_arrow"
-                    style="@style/BarKeyStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:text="@string/set_style_arrow" />
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="Тачпад"
+                    android:textColor="@color/acc_soft"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/st_cross"
-                    style="@style/BarKeyStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:text="@string/set_style_cross" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/st_dot"
-                    style="@style/BarKeyStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:text="@string/set_style_dot" />
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Скорость курсора"
+                        android:textColor="@color/txt_main"
+                        android:textSize="14sp" />
 
-                <TextView
-                    android:id="@+id/st_hand"
-                    style="@style/BarKeyStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:text="@string/set_style_hand" />
+                    <TextView
+                        android:id="@+id/tv_speed"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="2.1×"
+                        android:textColor="@color/acc_soft"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/sb_speed"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:max="32"
+                    android:progressTint="@color/acc"
+                    android:thumbTint="@color/acc_soft" />
+
+                <!-- Ширина и высота тачпада -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Ширина тачпада"
+                        android:textColor="@color/txt_main"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/tv_pad_w"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="320 dp"
+                        android:textColor="@color/acc_soft"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/sb_pad_w"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:progressTint="@color/acc"
+                    android:thumbTint="@color/acc_soft" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Высота тачпада"
+                        android:textColor="@color/txt_main"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/tv_pad_h"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="240 dp"
+                        android:textColor="@color/acc_soft"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/sb_pad_h"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:progressTint="@color/acc"
+                    android:thumbTint="@color/acc_soft" />
             </LinearLayout>
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/set_cursor_color"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
-
+            <!-- Секция: Курсор (.sec) -->
             <LinearLayout
-                android:id="@+id/pal_cursor"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_touchpad_well"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/set_glow_color"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="Курсор"
+                    android:textColor="@color/acc_soft"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Размер"
+                        android:textColor="@color/txt_main"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/tv_size"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="48 px"
+                        android:textColor="@color/acc_soft"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <SeekBar
+                    android:id="@+id/sb_size"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:max="72"
+                    android:progressTint="@color/acc"
+                    android:thumbTint="@color/acc_soft" />
+
+                <!-- Стиль курсора -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"
+                    android:text="Стиль курсора"
+                    android:textColor="@color/txt_main"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/st_arrow"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Стрелка"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/st_cross"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Крест"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/st_dot"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Точка"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/st_hand"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Рука"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <!-- Цвет курсора (палитра 12 неоновых шаров) -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="6dp"
+                    android:text="Цвет курсора"
+                    android:textColor="@color/txt_main"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:id="@+id/pal_cursor"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- Секция: Цвет корпуса тачпада и клавиатуры (.sec) -->
             <LinearLayout
-                android:id="@+id/pal_glow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_touchpad_well"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-            <TextView
-                android:id="@+id/tv_pad_w"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/set_pad_w"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="Цвет корпуса тачпада и клавиатуры"
+                    android:textColor="@color/acc_soft"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
 
-            <SeekBar
-                android:id="@+id/sb_pad_w"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                <LinearLayout
+                    android:id="@+id/pal_pad"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
 
-            <TextView
-                android:id="@+id/tv_pad_h"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/set_pad_h"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
-
-            <SeekBar
-                android:id="@+id/sb_pad_h"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/set_pad_color"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
-
+            <!-- Секция: Подсветка букв и цифр (.sec) -->
             <LinearLayout
-                android:id="@+id/pal_pad"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_touchpad_well"
+                android:orientation="vertical"
+                android:padding="12dp">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/set_key_glow"
-                android:textColor="#E0F7FF"
-                android:textSize="14sp" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="Подсветка букв и цифр"
+                    android:textColor="@color/acc_soft"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
 
+                <LinearLayout
+                    android:id="@+id/pal_key"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- Секция: Звук нажатий (.sec) -->
             <LinearLayout
-                android:id="@+id/pal_key"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/bg_touchpad_well"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="12dp">
 
-            <CheckBox
-                android:id="@+id/cb_sound"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="@string/set_sound"
-                android:textColor="#E0F7FF" />
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Звук нажатий"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <CheckBox
+                    android:id="@+id/cb_sound"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:buttonTint="@color/acc_soft"
+                    android:checked="true" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 
-    <LinearLayout
+    <!-- Кнопка «Готово» (.close .glass) -->
+    <TextView
+        android:id="@+id/btn_done"
+        style="@style/BarKeyStyle"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="44dp"
         android:layout_marginTop="8dp"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/btn_close"
-            style="@style/KeyStyle"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:text="@string/set_close" />
-
-        <TextView
-            android:id="@+id/btn_done"
-            style="@style/KeyStyle"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:text="@string/set_done"
-            android:textColor="@color/neon_blue"
-            android:textStyle="bold" />
-    </LinearLayout>
+        android:text="Готово"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:textStyle="bold" />
 </LinearLayout>
