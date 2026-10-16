@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/kb_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_kb_body">
+
+    <!-- Высоту kb_main задаёт VirtualMouseIME (42% / 55% экрана, максимум 400dp) -->
+    <LinearLayout
+        android:id="@+id/kb_main"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:orientation="vertical"
+        android:padding="3dp">
+
+        <LinearLayout
+            android:id="@+id/kb_bar"
+            android:layout_width="match_parent"
+            android:layout_height="38dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/kb_btn_lang"
+                style="@style/BarKeyStyle"
+                android:layout_width="64dp"
+                android:layout_height="match_parent"
+                android:text="РУС" />
+
+            <TextView
+                android:id="@+id/kb_btn_clip"
+                style="@style/BarKeyStyle"
+                android:layout_width="48dp"
+                android:layout_height="match_parent"
+                android:text="📋"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/kb_btn_settings"
+                style="@style/BarKeyStyle"
+                android:layout_width="48dp"
+                android:layout_height="match_parent"
+                android:text="⚙" />
+
+            <TextView
+                android:id="@+id/kb_btn_hide"
+                style="@style/BarKeyStyle"
+                android:layout_width="48dp"
+                android:layout_height="match_parent"
+                android:text="⌄" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/kb_rows"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical" />
+    </LinearLayout>
+
+    <!-- Панель истории буфера обмена -->
+    <LinearLayout
+        android:id="@+id/kb_clip_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_kb_panel"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:padding="6dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/kb_clip_title"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:paddingStart="6dp"
+                android:textColor="#00BFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/kb_clip_close"
+                style="@style/BarKeyStyle"
+                android:layout_width="48dp"
+                android:layout_height="match_parent"
+                android:text="✕" />
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:id="@+id/kb_clip_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </ScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/kb_clip_copy"
+                style="@style/BarKeyStyle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Копировать" />
+
+            <TextView
+                android:id="@+id/kb_clip_sys"
+                style="@style/BarKeyStyle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.6"
+                android:text="Из системного буфера" />
+
+            <TextView
+                android:id="@+id/kb_clip_clear"
+                style="@style/BarKeyStyle"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="Очистить" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

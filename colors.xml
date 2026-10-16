@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="neon_blue">#00BFFF</color>
+    <color name="neon_dark">#0A1628</color>
+    <color name="bg_dark">#0A0E17</color>
+    <color name="ic_launcher_background">#0A0E17</color>
+</resources>

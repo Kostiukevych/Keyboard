@@ -1,0 +1,80 @@
+VirtualMouse: итоговая структура проекта
+=========================================
+
+В архиве все файлы лежат в одной папке (без подпапок). В Android Studio / GitHub / Google AI Studio
+разложите их так:
+
+VirtualMouse/
+├── settings.gradle.kts
+├── build.gradle.kts                  ← root.build.gradle.kts
+├── gradle.properties
+├── .gitignore                        ← gitignore.txt
+├── README.md
+├── STRUCTURE.txt
+├── .github/
+│   └── workflows/
+│       └── android-build.yml
+└── app/
+    ├── build.gradle.kts              ← app.build.gradle.kts
+    ├── proguard-rules.pro
+    └── src/main/
+        ├── AndroidManifest.xml
+        ├── java/com/example/virtualmouse/
+        │   ├── MainActivity.kt
+        │   ├── OverlayService.kt
+        │   ├── MouseAccessibilityService.kt
+        │   ├── CursorOverlay.kt
+        │   ├── TouchpadWindow.kt
+        │   ├── FloatingButton.kt
+        │   ├── SettingsWindow.kt
+        │   ├── VirtualMouseIME.kt
+        │   ├── KeyboardLayouts.kt
+        │   ├── CursorSettings.kt
+        │   ├── PreferenceHelper.kt
+        │   └── ClipboardManager.kt   (класс AppClipboardManager)
+        └── res/
+            ├── layout/
+            │   ├── activity_main.xml
+            │   ├── overlay_touchpad.xml
+            │   ├── dialog_settings.xml
+            │   └── ime_keyboard.xml
+            ├── drawable/
+            │   ├── bg_float_button.xml
+            │   ├── bg_key_active.xml
+            │   ├── bg_kb_body.xml
+            │   ├── bg_kb_panel.xml
+            │   ├── bg_neon_button.xml
+            │   ├── bg_neon_move_area.xml
+            │   ├── bg_neon_panel.xml
+            │   ├── cursor_arrow.xml
+            │   ├── cursor_cross.xml
+            │   ├── cursor_dot.xml
+            │   ├── cursor_hand.xml
+            │   └── ic_launcher_foreground.xml
+            ├── mipmap-anydpi-v26/
+            │   ├── ic_launcher.xml
+            │   └── ic_launcher_round.xml
+            ├── values/
+            │   ├── colors.xml
+            │   ├── strings.xml
+            │   └── styles.xml
+            └── xml/
+                ├── accessibility_service_config.xml
+                └── method.xml
+
+Соответствие плоских имён из архива путям в проекте
+---------------------------------------------------
+*.kt                              → app/src/main/java/com/example/virtualmouse/
+activity_main.xml, overlay_touchpad.xml,
+dialog_settings.xml, ime_keyboard.xml → app/src/main/res/layout/
+bg_*.xml, cursor_*.xml, ic_launcher_foreground.xml → app/src/main/res/drawable/
+ic_launcher.xml, ic_launcher_round.xml → app/src/main/res/mipmap-anydpi-v26/
+colors.xml, strings.xml, styles.xml → app/src/main/res/values/
+accessibility_service_config.xml, method.xml → app/src/main/res/xml/
+AndroidManifest.xml               → app/src/main/
+app.build.gradle.kts              → app/build.gradle.kts
+proguard-rules.pro                → app/proguard-rules.pro
+root.build.gradle.kts             → build.gradle.kts (корень)
+settings.gradle.kts, gradle.properties, README.md, STRUCTURE.txt → корень
+gitignore.txt                     → .gitignore
+android-build.yml                 → .github/workflows/android-build.yml

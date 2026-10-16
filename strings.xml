@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Virtual Mouse</string>
+    <string name="accessibility_service_description">Сервис для управления курсором и ввода с виртуальной мыши и клавиатуры</string>
+
+    <!-- Уведомление -->
+    <string name="notif_channel">Виртуальная мышь</string>
+    <string name="notif_title">Virtual Mouse работает</string>
+    <string name="notif_text">Нажмите, чтобы открыть приложение</string>
+    <string name="notif_stop">Остановить</string>
+
+    <!-- Главный экран -->
+    <string name="main_title">Virtual Mouse</string>
+    <string name="main_status">Статус</string>
+    <string name="st_overlay">Поверх других окон</string>
+    <string name="st_access">Служба специальных возможностей</string>
+    <string name="st_ime_enabled">Клавиатура включена</string>
+    <string name="st_ime_selected">Клавиатура выбрана</string>
+    <string name="st_running">Оверлей запущен</string>
+    <string name="btn_overlay">Разрешить поверх окон</string>
+    <string name="btn_access">Включить Accessibility</string>
+    <string name="btn_ime_enable">Включить клавиатуру</string>
+    <string name="btn_ime_pick">Выбрать клавиатуру</string>
+    <string name="btn_start">Старт</string>
+    <string name="btn_stop">Стоп</string>
+    <string name="main_hint">На Android 13+ при установке APK не из магазина: Настройки → Приложения → Virtual Mouse → ⋮ → Разрешить ограниченные настройки, и только потом включайте Accessibility.</string>
+    <string name="toast_need_perms">Сначала выдайте разрешение поверх окон и включите Accessibility</string>
+    <string name="toast_no_picker">Не удалось открыть выбор клавиатуры</string>
+    <string name="toast_no_settings">Не удалось открыть настройки</string>
+
+    <!-- Окно настроек -->
+    <string name="set_title">Настройки</string>
+    <string name="set_speed">Скорость курсора</string>
+    <string name="set_size">Размер курсора</string>
+    <string name="set_style">Стиль курсора</string>
+    <string name="set_style_arrow">Стрелка</string>
+    <string name="set_style_cross">Крест</string>
+    <string name="set_style_dot">Точка</string>
+    <string name="set_style_hand">Рука</string>
+    <string name="set_cursor_color">Цвет курсора</string>
+    <string name="set_glow_color">Цвет свечения</string>
+    <string name="set_pad_w">Ширина тачпада</string>
+    <string name="set_pad_h">Высота тачпада</string>
+    <string name="set_pad_color">Цвет корпуса</string>
+    <string name="set_key_glow">Подсветка клавиш</string>
+    <string name="set_sound">Звук нажатий</string>
+    <string name="set_done">Готово</string>
+    <string name="set_close">Закрыть</string>
+</resources>
