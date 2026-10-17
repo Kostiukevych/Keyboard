@@ -22,5 +22,17 @@ data class CursorSettings(
     var padColor: Int = Color.parseColor("#2E7BFF"),     // Цвет темы корпуса тачпада и клавиатуры (--acc)
     var keyGlowColor: Int = Color.parseColor("#2E7BFF"), // Подсветка букв и цифр (--glow)
     var soundOn: Boolean = true,                         // Звук нажатий
-    var language: Int = 1                                // 0=EN, 1=RU, 2=UK
-)
+    var language: Int = 1,                               // 0=EN, 1=RU, 2=UK
+    var padStyle: Int = 0,                               // 0=тачпад, 1=трекбол Orbit X
+    var kbStyle: Int = 0,                                // 0=классическая клавиатура, 1=Neon Keys
+    var ballWidthDp: Int = 300,                          // Размер окна трекбола
+    var ballHeightDp: Int = 380
+) {
+    /** Ширина/высота окна текущего указателя (у тачпада и трекбола свои размеры). */
+    var curW: Int
+        get() = if (padStyle == 1) ballWidthDp else padWidthDp
+        set(v) { if (padStyle == 1) ballWidthDp = v else padWidthDp = v }
+    var curH: Int
+        get() = if (padStyle == 1) ballHeightDp else padHeightDp
+        set(v) { if (padStyle == 1) ballHeightDp = v else padHeightDp = v }
+}

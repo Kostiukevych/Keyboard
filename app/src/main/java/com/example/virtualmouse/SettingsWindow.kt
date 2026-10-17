@@ -80,6 +80,34 @@ class SettingsWindow(
             tvSize.text = "${settings.cursorSizeDp} px"
         })
 
+        // Стиль интерфейса: указатель (тачпад / трекбол) и клавиатура (классика / Neon)
+        val padBtns = listOf(R.id.st_pad_touch, R.id.st_pad_ball).map { v.findViewById<TextView>(it) }
+        val kbBtns = listOf(R.id.st_kb_classic, R.id.st_kb_neon).map { v.findViewById<TextView>(it) }
+        fun markStyles() {
+            padBtns.forEachIndexed { i, b -> b.isSelected = i == settings.padStyle; b.setTextColor(if (i == settings.padStyle) Color.WHITE else Color.parseColor("#7A8C9E")) }
+            kbBtns.forEachIndexed { i, b -> b.isSelected = i == settings.kbStyle; b.setTextColor(if (i == settings.kbStyle) Color.WHITE else Color.parseColor("#7A8C9E")) }
+        }
+        markStyles()
+        padBtns.forEachIndexed { i, b ->
+            b.setOnClickListener {
+                if (settings.padStyle == i) return@setOnClickListener
+                sounds.beep(420)
+                settings.padStyle = i
+                onChanged()
+                onSave()
+                // Размеры окна у стилей свои: перестраиваем диалог, чтобы ползунки показали актуальные значения
+                hide(); show()
+            }
+        }
+        kbBtns.forEachIndexed { i, b ->
+            b.setOnClickListener {
+                sounds.beep(420)
+                settings.kbStyle = i
+                markStyles()
+                onSave()
+            }
+        }
+
         // Стиль курсора
         styleButtons.clear()
         listOf(R.id.st_arrow, R.id.st_cross, R.id.st_dot, R.id.st_hand).forEachIndexed { i, id ->
@@ -116,21 +144,21 @@ class SettingsWindow(
         val sbW = v.findViewById<SeekBar>(R.id.sb_pad_w)
         val tvW = v.findViewById<TextView>(R.id.tv_pad_w)
         sbW.max = maxW - 220
-        sbW.progress = (settings.padWidthDp - 220).coerceIn(0, maxW - 220)
-        tvW.text = "${settings.padWidthDp} dp"
+        sbW.progress = (settings.curW - 220).coerceIn(0, maxW - 220)
+        tvW.text = "${settings.curW} dp"
         sbW.setOnSeekBarChangeListener(seek { p ->
-            settings.padWidthDp = 220 + p
-            tvW.text = "${settings.padWidthDp} dp"
+            settings.curW = 220 + p
+            tvW.text = "${settings.curW} dp"
         })
 
         val sbH = v.findViewById<SeekBar>(R.id.sb_pad_h)
         val tvH = v.findViewById<TextView>(R.id.tv_pad_h)
         sbH.max = maxH - 160
-        sbH.progress = (settings.padHeightDp - 160).coerceIn(0, maxH - 160)
-        tvH.text = "${settings.padHeightDp} dp"
+        sbH.progress = (settings.curH - 160).coerceIn(0, maxH - 160)
+        tvH.text = "${settings.curH} dp"
         sbH.setOnSeekBarChangeListener(seek { p ->
-            settings.padHeightDp = 160 + p
-            tvH.text = "${settings.padHeightDp} dp"
+            settings.curH = 160 + p
+            tvH.text = "${settings.curH} dp"
         })
 
         // Звук нажатий

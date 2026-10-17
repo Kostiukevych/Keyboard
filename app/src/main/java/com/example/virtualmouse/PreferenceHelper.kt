@@ -24,7 +24,11 @@ object PreferenceHelper {
             padColor = p.getInt("padColor", D.padColor),
             keyGlowColor = p.getInt("keyGlowColor", D.keyGlowColor),
             soundOn = p.getBoolean("soundOn", D.soundOn),
-            language = p.getInt("language", D.language)
+            language = p.getInt("language", D.language),
+            padStyle = p.getInt("padStyle", D.padStyle),
+            kbStyle = p.getInt("kbStyle", D.kbStyle),
+            ballWidthDp = p.getInt("ballWidthDp", D.ballWidthDp),
+            ballHeightDp = p.getInt("ballHeightDp", D.ballHeightDp)
         )
     }
 
@@ -46,6 +50,10 @@ object PreferenceHelper {
             putInt("keyGlowColor", s.keyGlowColor)
             putBoolean("soundOn", s.soundOn)
             putInt("language", s.language)
+            putInt("padStyle", s.padStyle)
+            putInt("kbStyle", s.kbStyle)
+            putInt("ballWidthDp", s.ballWidthDp)
+            putInt("ballHeightDp", s.ballHeightDp)
             apply()
         }
     }

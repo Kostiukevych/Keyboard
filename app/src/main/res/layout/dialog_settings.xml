@@ -27,6 +27,89 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- Секция: Стиль интерфейса -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:background="@drawable/bg_touchpad_well"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Стиль интерфейса"
+                    android:textColor="@color/acc_soft"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"
+                    android:text="Указатель"
+                    android:textColor="@color/txt_main"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="38dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/st_pad_touch"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Тачпад"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/st_pad_ball"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Трекбол Orbit X"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="6dp"
+                    android:text="Клавиатура"
+                    android:textColor="@color/txt_main"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="38dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/st_kb_classic"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Классическая"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/st_kb_neon"
+                        style="@style/BarKeyStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Neon Keys"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- Секция: Тачпад (.sec) -->
             <LinearLayout
                 android:layout_width="match_parent"

@@ -1,62 +1,82 @@
 package com.example.virtualmouse
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.View
 import android.view.inputmethod.InputMethodManager
-import android.widget.TextView
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 
+/**
+ * Главный экран: интерфейс рисует HTML (assets/virtual-mouse.html) в WebView.
+ * Страница вызывает методы моста Android.* (overlay, accessibility, enableKeyboard, pickKeyboard, stop),
+ * а приложение передаёт в неё статусы через window.setState({...}).
+ */
 class MainActivity : AppCompatActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var btnToggle: TextView
+    private lateinit var web: WebView
+    private var pageReady = false
+    private var userStopped = false
 
     private val notifLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    private inner class Bridge {
+        @JavascriptInterface fun overlay() { handler.post { onOverlay() } }
+        @JavascriptInterface fun accessibility() { handler.post { onAccessibility() } }
+        @JavascriptInterface fun enableKeyboard() { handler.post { onEnableKeyboard() } }
+        @JavascriptInterface fun pickKeyboard() { handler.post { onPickKeyboard() } }
+        @JavascriptInterface fun stop() { handler.post { onStopToggle() } }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        btnToggle = findViewById(R.id.btn_toggle)
 
-        findViewById<TextView>(R.id.btn_overlay).setOnClickListener {
-            open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        // Цвет системных панелей под фон страницы
+        window.statusBarColor = Color.parseColor("#A9B8E6")
+        window.navigationBarColor = Color.parseColor("#A9B8E6")
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
         }
-        findViewById<TextView>(R.id.btn_access).setOnClickListener {
-            open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        findViewById<TextView>(R.id.btn_ime_enable).setOnClickListener {
-            open(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
-        }
-        findViewById<TextView>(R.id.btn_ime_pick).setOnClickListener {
-            try {
-                (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
-            } catch (_: Exception) {
-                Toast.makeText(this, R.string.toast_no_picker, Toast.LENGTH_SHORT).show()
+
+        web = findViewById(R.id.main_web)
+        web.setBackgroundColor(Color.parseColor("#A9B8E6"))
+        web.isVerticalScrollBarEnabled = false
+        web.isHorizontalScrollBarEnabled = false
+        web.overScrollMode = View.OVER_SCROLL_NEVER
+        web.isLongClickable = false
+        web.setOnLongClickListener { true }
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true
+        web.addJavascriptInterface(Bridge(), "Android")
+        web.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                pageReady = true
+                refresh()
             }
         }
-        btnToggle.setOnClickListener {
-            if (OverlayService.isRunning) {
-                stopService(Intent(this, OverlayService::class.java))
-            } else if (overlayOk() && accessOk()) {
-                ContextCompat.startForegroundService(this, Intent(this, OverlayService::class.java))
-            } else {
-                Toast.makeText(this, R.string.toast_need_perms, Toast.LENGTH_LONG).show()
-            }
-            handler.postDelayed({ refresh() }, 400)
-        }
+        web.loadUrl("file:///android_asset/virtual-mouse.html")
 
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -68,12 +88,62 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        web.onResume()
         refresh()
+    }
+
+    override fun onPause() {
+        web.onPause()
+        super.onPause()
     }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        try {
+            web.removeJavascriptInterface("Android")
+            web.destroy()
+        } catch (_: Exception) {
+        }
         super.onDestroy()
+    }
+
+    // ---------- Действия кнопок страницы ----------
+
+    private fun onOverlay() =
+        open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+
+    private fun onAccessibility() = open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+
+    private fun onEnableKeyboard() = open(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+
+    private fun onPickKeyboard() {
+        try {
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.toast_no_picker, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** «Стоп»: если оверлей работает — останавливает; если остановлен — запускает снова. */
+    private fun onStopToggle() {
+        if (OverlayService.isRunning) {
+            userStopped = true
+            stopService(Intent(this, OverlayService::class.java))
+        } else if (overlayOk() && accessOk()) {
+            userStopped = false
+            startOverlay()
+        } else {
+            Toast.makeText(this, R.string.toast_need_perms, Toast.LENGTH_LONG).show()
+        }
+        handler.postDelayed({ refresh() }, 400)
+    }
+
+    private fun startOverlay() {
+        try {
+            ContextCompat.startForegroundService(this, Intent(this, OverlayService::class.java))
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.toast_need_perms, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun open(intent: Intent) {
@@ -83,6 +153,8 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.toast_no_settings, Toast.LENGTH_SHORT).show()
         }
     }
+
+    // ---------- Проверка статусов ----------
 
     private fun overlayOk() = Settings.canDrawOverlays(this)
 
@@ -140,25 +212,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun mark(id: Int, ok: Boolean, text: Int) {
-        findViewById<TextView>(id).apply {
-            this.text = (if (ok) "✅ " else "❌ ") + getString(text)
-            setTextColor(if (ok) 0xFF00FF88.toInt() else 0xFFFF6677.toInt())
-        }
-    }
-
+    /** Передаёт текущие статусы в страницу; при выданных разрешениях сам запускает оверлей. */
     private fun refresh() {
         val ov = overlayOk()
         val ac = accessOk()
-        val running = OverlayService.isRunning
-        mark(R.id.tv_status_overlay, ov, R.string.st_overlay)
-        mark(R.id.tv_status_access, ac, R.string.st_access)
-        mark(R.id.tv_status_ime_enabled, imeEnabled(), R.string.st_ime_enabled)
-        mark(R.id.tv_status_ime_selected, imeSelected(), R.string.st_ime_selected)
-        mark(R.id.tv_status_running, running, R.string.st_running)
-        btnToggle.setText(if (running) R.string.btn_stop else R.string.btn_start)
-        val enabled = running || (ov && ac)
-        btnToggle.isEnabled = enabled
-        btnToggle.alpha = if (enabled) 1f else 0.4f
+        val ime = imeEnabled()
+        val sel = imeSelected()
+
+        if (ov && ac && !userStopped && !OverlayService.isRunning) {
+            startOverlay()
+            handler.postDelayed({ pushState(ov, ac, ime, sel) }, 400)
+        }
+        pushState(ov, ac, ime, sel)
+    }
+
+    private fun pushState(ov: Boolean, ac: Boolean, ime: Boolean, sel: Boolean) {
+        if (!pageReady) return
+        val js = "window.setState({overlay:$ov,accessibility:$ac,enableKeyboard:$ime," +
+                "pickKeyboard:$sel,running:${OverlayService.isRunning}})"
+        web.evaluateJavascript(js, null)
     }
 }

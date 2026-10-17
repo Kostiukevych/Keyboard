@@ -37,7 +37,7 @@ class TouchpadWindow(
     private val onSettings: () -> Unit,
     private val onKeyboard: () -> Unit,
     private val onHide: () -> Unit
-) {
+) : PadWindow {
     private val density = ctx.resources.displayMetrics.density
     private val handler = Handler(Looper.getMainLooper())
     private val sounds = SoundManager.get(ctx) { getSettings().soundOn }
@@ -72,7 +72,7 @@ class TouchpadWindow(
     private var rClickTimer: Runnable? = null
     private var lastWheelTick = 0f
 
-    val isShown: Boolean get() = root != null
+    override val isShown: Boolean get() = root != null
 
     private fun dp(v: Int) = (v * density).toInt()
 
@@ -114,7 +114,7 @@ class TouchpadWindow(
         }
     }
 
-    fun show() {
+    override fun show() {
         if (root != null) return
         val v = LayoutInflater.from(ContextThemeWrapper(ctx, R.style.Theme_VirtualMouse))
             .inflate(R.layout.overlay_touchpad, null)
@@ -129,7 +129,7 @@ class TouchpadWindow(
         }
     }
 
-    fun hide() {
+    override fun hide() {
         stopCharge()
         if (held) release()
         if (selDrag) { MouseAccessibilityService.instance?.dragEnd(); selDrag = false }
@@ -145,7 +145,7 @@ class TouchpadWindow(
         root = null
     }
 
-    fun applySettings() {
+    override fun applySettings() {
         if (root == null) return
         fit()
         lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
@@ -161,7 +161,7 @@ class TouchpadWindow(
         root?.findViewById<TextView>(R.id.pad_title)?.setTextColor(s.padColor)
     }
 
-    fun destroy() {
+    override fun destroy() {
         hide()
     }
 

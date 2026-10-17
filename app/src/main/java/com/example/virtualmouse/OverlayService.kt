@@ -31,7 +31,8 @@ class OverlayService : Service() {
     private lateinit var settings: CursorSettings
     private var cursor: CursorOverlay? = null
     private var button: FloatingButton? = null
-    private var pad: TouchpadWindow? = null
+    private var pad: PadWindow? = null
+    private var padStyleBuilt = 0
     private var settingsWindow: SettingsWindow? = null
     private var started = false
 
@@ -95,21 +96,13 @@ class OverlayService : Service() {
         c.applySettings(settings)
         updateScreen()
 
-        val p = TouchpadWindow(
-            this, wm, c,
-            getSettings = { settings },
-            save = { persist() },
-            onSettings = { toggleSettings() },
-            onKeyboard = { showPicker() },
-            onHide = { hidePad() }
-        )
-        pad = p
+        pad = buildPad(c)
 
         button = FloatingButton(
             this, wm,
             getSettings = { settings },
             save = { persist() },
-            onTap = { if (p.isShown) hidePad() else showPad() },
+            onTap = { if (pad?.isShown == true) hidePad() else showPad() },
             onLongTap = { toggleSettings() }
         ).also { it.show() }
 
@@ -119,6 +112,31 @@ class OverlayService : Service() {
             onSave = { persist() }
         )
         showPad()
+    }
+
+    /** Создаёт окно управления курсором выбранного стиля: 0 = тачпад, 1 = трекбол Orbit X. */
+    private fun buildPad(c: CursorOverlay): PadWindow {
+        padStyleBuilt = settings.padStyle
+        val save = { persist() }
+        return if (settings.padStyle == 1) {
+            TrackballWindow(
+                this, wm, c,
+                getSettings = { settings },
+                save = save,
+                onSettings = { toggleSettings() },
+                onKeyboard = { showPicker() },
+                onHide = { hidePad() }
+            )
+        } else {
+            TouchpadWindow(
+                this, wm, c,
+                getSettings = { settings },
+                save = save,
+                onSettings = { toggleSettings() },
+                onKeyboard = { showPicker() },
+                onHide = { hidePad() }
+            )
+        }
     }
 
     /** Язык меняет клавиатура (IME) в тех же настройках: не затираем его устаревшим значением. */
@@ -144,6 +162,14 @@ class OverlayService : Service() {
 
     private fun applyAll() {
         cursor?.applySettings(settings)
+        val c = cursor
+        if (c != null && settings.padStyle != padStyleBuilt) {
+            // Смена стиля указателя: пересоздаём окно, сохраняя «показано/скрыто»
+            val wasShown = pad?.isShown == true
+            pad?.destroy()
+            pad = buildPad(c)
+            if (wasShown) showPad()
+        }
         pad?.applySettings()
     }
 

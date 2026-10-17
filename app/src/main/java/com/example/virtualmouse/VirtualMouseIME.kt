@@ -21,6 +21,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.annotation.SuppressLint
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import org.json.JSONObject
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -51,6 +55,8 @@ class VirtualMouseIME : InputMethodService() {
 
     private var root: View? = null
     private var rowsBox: LinearLayout? = null
+    private var web: WebView? = null
+    private var builtStyle = 0
     private val keyViews = ArrayList<Pair<TextView, Key>>()
     private var layer = KeyboardLayouts.L_LETTERS
     private var ctrl = false
@@ -106,6 +112,125 @@ class VirtualMouseIME : InputMethodService() {
     override fun onEvaluateFullscreenMode() = false
 
     override fun onCreateInputView(): View {
+        settings = PreferenceHelper.load(this)
+        builtStyle = settings.kbStyle
+        return if (builtStyle == 1) createNeonView() else createClassicView()
+    }
+
+    private fun bindClipButtons(v: View) {
+        v.findViewById<View>(R.id.kb_clip_close).setOnClickListener {
+            sounds.beep(180)
+            hideClip()
+        }
+        v.findViewById<View>(R.id.kb_clip_clear).setOnClickListener {
+            sounds.beep(180)
+            clip.clear()
+            fillClip()
+        }
+    }
+
+    // ---------- Клавиатура Neon Keys (HTML в WebView) ----------
+
+    private inner class NeonBridge {
+        @JavascriptInterface fun onKey(json: String) { handler.post { neonKey(json) } }
+        @JavascriptInterface fun onSize(hCss: Int) { handler.post { neonResize(hCss) } }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+    private fun createNeonView(): View {
+        val v = LayoutInflater.from(ContextThemeWrapper(this, R.style.Theme_VirtualMouse))
+            .inflate(R.layout.ime_neon, null)
+        root = v
+        rowsBox = null
+        bindClipButtons(v)
+        web?.destroy()
+        val w = v.findViewById<WebView>(R.id.kb_web)
+        web = w
+        w.setBackgroundColor(Color.TRANSPARENT)
+        w.isVerticalScrollBarEnabled = false
+        w.isHorizontalScrollBarEnabled = false
+        w.overScrollMode = View.OVER_SCROLL_NEVER
+        w.settings.javaScriptEnabled = true
+        w.settings.domStorageEnabled = true
+        w.isLongClickable = false
+        w.setOnLongClickListener { true }
+        w.addJavascriptInterface(NeonBridge(), "Android")
+        w.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                view?.evaluateJavascript("setLang(${settings.language.coerceIn(0, 2)})", null)
+            }
+        }
+        w.loadUrl("file:///android_asset/keyboard_neon.html")
+        return v
+    }
+
+    private fun neonResize(hCss: Int) {
+        val w = web ?: return
+        val h = (hCss * density).toInt().coerceAtLeast(dp(120))
+        val lp = w.layoutParams
+        if (lp != null && lp.height != h) {
+            lp.height = h
+            w.layoutParams = lp
+        }
+    }
+
+    private fun neonKey(json: String) {
+        val o = try { JSONObject(json) } catch (_: Exception) { return }
+        val code = o.optString("code")
+        when (code) {
+            "SETTINGS" -> {
+                sounds.beep(340)
+                startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            }
+            "HIDE" -> { sounds.beep(180); requestHideSelf(0); return }
+            "LANG" -> {
+                val n = o.optInt("lang", 1).coerceIn(0, 2)
+                val st = PreferenceHelper.load(this)
+                st.language = n
+                PreferenceHelper.save(this, st)
+                settings.language = n
+                sounds.beep(if (n == 1) 380 else 520)
+                return
+            }
+        }
+        ctrl = o.optBoolean("ctrl"); alt = o.optBoolean("alt"); win = o.optBoolean("win")
+        shiftOnce = o.optBoolean("shift"); caps = o.optBoolean("caps")
+        sounds.beep(260)
+        try {
+            when (code) {
+                "" -> {
+                    val t = o.optString("text")
+                    if (t.isNotEmpty()) neonText(t, o.optString("latin"))
+                }
+                "SPACE" -> if (ctrl || alt || win) sendKey(KeyEvent.KEYCODE_SPACE) else commit(" ")
+                "BKSP" -> backspace()
+                "CLIP" -> showClip()
+                else -> sendKey(codeOf(code))
+            }
+        } finally {
+            ctrl = false; alt = false; win = false; shiftOnce = false; caps = false
+        }
+    }
+
+    private fun neonText(t: String, latin: String) {
+        if (ctrl || alt || win) {
+            val ch = (if (latin.isNotEmpty()) latin else t)[0]
+            val code = charCode(ch)
+            if (code != 0) {
+                if (ctrl && !alt && !win && ch.lowercaseChar() in "cvxaz") shortcut(ch.lowercaseChar(), code)
+                else sendKey(code)
+                return
+            }
+        }
+        commit(t)
+    }
+
+    // ---------- Классическая клавиатура ----------
+
+    private fun createClassicView(): View {
+        web?.let { try { it.destroy() } catch (_: Exception) {} }
+        web = null
         val v = LayoutInflater.from(ContextThemeWrapper(this, R.style.Theme_VirtualMouse))
             .inflate(R.layout.ime_keyboard, null)
         root = v
@@ -125,15 +250,7 @@ class VirtualMouseIME : InputMethodService() {
             sounds.beep(180)
             requestHideSelf(0)
         }
-        v.findViewById<View>(R.id.kb_clip_close).setOnClickListener {
-            sounds.beep(180)
-            hideClip()
-        }
-        v.findViewById<View>(R.id.kb_clip_clear).setOnClickListener {
-            sounds.beep(180)
-            clip.clear()
-            fillClip()
-        }
+        bindClipButtons(v)
         refreshAll()
         return v
     }
@@ -143,18 +260,25 @@ class VirtualMouseIME : InputMethodService() {
         settings = PreferenceHelper.load(this)
         ctrl = false; alt = false; win = false; shiftOnce = false
         if (!restarting) layer = KeyboardLayouts.L_LETTERS
+        if (root != null && settings.kbStyle != builtStyle) {
+            // Пользователь сменил стиль клавиатуры в настройках: пересобираем панель
+            setInputView(onCreateInputView())
+        }
         hideClip()
-        if (root != null) refreshAll()
+        if (rowsBox != null) refreshAll()
+        web?.evaluateJavascript("setLang(${settings.language.coerceIn(0, 2)})", null)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (root != null) refreshAll()
+        if (rowsBox != null) refreshAll()
     }
 
     override fun onDestroy() {
         stopRepeat()
         if (instance === this) instance = null
+        web?.let { try { it.destroy() } catch (_: Exception) {} }
+        web = null
         clip.onChanged = null
         try {
             val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
