@@ -142,22 +142,6 @@
             android:paddingTop="4dp">
 
             <TextView
-                android:id="@+id/kb_clip_copy"
-                style="@style/BarKeyStyle"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:text="Копировать" />
-
-            <TextView
-                android:id="@+id/kb_clip_sys"
-                style="@style/BarKeyStyle"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1.6"
-                android:text="Из системы" />
-
-            <TextView
                 android:id="@+id/kb_clip_clear"
                 style="@style/BarKeyStyle"
                 android:layout_width="0dp"

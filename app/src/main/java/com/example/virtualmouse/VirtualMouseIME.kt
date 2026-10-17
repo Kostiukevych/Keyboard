@@ -35,10 +35,14 @@ import com.example.virtualmouse.KeyboardLayouts.Key
  */
 class VirtualMouseIME : InputMethodService() {
 
-    private companion object {
-        val REPEAT = setOf("BKSP", "UP", "DOWN", "LEFT", "RIGHT")
-        const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
+    companion object {
+        @Volatile
+        var instance: VirtualMouseIME? = null
+        private val REPEAT = setOf("BKSP", "UP", "DOWN", "LEFT", "RIGHT")
+        private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
     }
+
+    private var sysClipListener: android.content.ClipboardManager.OnPrimaryClipChangedListener? = null
 
     private val handler = Handler(Looper.getMainLooper())
     private var settings = CursorSettings()
@@ -68,8 +72,35 @@ class VirtualMouseIME : InputMethodService() {
     override fun onCreate() {
         super.onCreate()
         settings = PreferenceHelper.load(this)
-        clip = AppClipboardManager(this)
+        clip = AppClipboardManager.get(this)
         sounds = SoundManager.get(this) { settings.soundOn }
+        instance = this
+        clip.onChanged = { handler.post { if (clipPanelShown()) fillClip() } }
+        // Всё, что копируется в системе (Ctrl+C и т.п.), попадает и в буфер приложения
+        try {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val l = android.content.ClipboardManager.OnPrimaryClipChangedListener {
+                try {
+                    val c = cm.primaryClip
+                    val t = if (c != null && c.itemCount > 0) c.getItemAt(0)?.coerceToText(this)?.toString() else null
+                    if (!t.isNullOrBlank()) clip.add(t)
+                } catch (_: Exception) {
+                }
+            }
+            cm.addPrimaryClipChangedListener(l)
+            sysClipListener = l
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Ctrl+<клавиша> (с Shift по желанию) в текущее поле ввода: используется тачпадом для отмены/повтора. */
+    fun ctrlKey(code: Int, shift: Boolean) {
+        val ic = currentInputConnection ?: run { toast("Нет активного поля ввода"); return }
+        var m = KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        if (shift) m = m or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        val now = SystemClock.uptimeMillis()
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0, m))
+        ic.sendKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0, m))
     }
 
     override fun onEvaluateFullscreenMode() = false
@@ -98,14 +129,6 @@ class VirtualMouseIME : InputMethodService() {
             sounds.beep(180)
             hideClip()
         }
-        v.findViewById<View>(R.id.kb_clip_copy).setOnClickListener {
-            sounds.beep(260)
-            clipCopy()
-        }
-        v.findViewById<View>(R.id.kb_clip_sys).setOnClickListener {
-            sounds.beep(260)
-            clipSystem()
-        }
         v.findViewById<View>(R.id.kb_clip_clear).setOnClickListener {
             sounds.beep(180)
             clip.clear()
@@ -131,6 +154,13 @@ class VirtualMouseIME : InputMethodService() {
 
     override fun onDestroy() {
         stopRepeat()
+        if (instance === this) instance = null
+        clip.onChanged = null
+        try {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            sysClipListener?.let { cm.removePrimaryClipChangedListener(it) }
+        } catch (_: Exception) {
+        }
         super.onDestroy()
     }
 
@@ -508,6 +538,9 @@ class VirtualMouseIME : InputMethodService() {
         fillClip()
     }
 
+    private fun clipPanelShown(): Boolean =
+        root?.findViewById<View>(R.id.kb_clip_panel)?.visibility == View.VISIBLE
+
     private fun hideClip() {
         root?.findViewById<View>(R.id.kb_clip_panel)?.visibility = View.GONE
     }
@@ -540,16 +573,6 @@ class VirtualMouseIME : InputMethodService() {
                 setOnClickListener { commit(item.text); hideClip() }
             })
         }
-    }
-
-    private fun clipCopy() {
-        val sel = currentInputConnection?.getSelectedText(0)?.toString()
-        if (sel.isNullOrEmpty()) toast("Нет выделенного текста") else { clip.add(sel); fillClip() }
-    }
-
-    private fun clipSystem() {
-        val s = clip.readSystemClipboard()
-        if (s.isNullOrBlank()) toast("Системный буфер пуст") else { clip.add(s, false); fillClip() }
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

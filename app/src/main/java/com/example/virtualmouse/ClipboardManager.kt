@@ -6,12 +6,14 @@ import android.content.Context
 import java.util.LinkedList
 
 /**
- * Буфер обмена с историей (в памяти процесса).
+ * Буфер обмена с историей (в памяти процесса). Один общий экземпляр на всё приложение:
+ * его используют и клавиатура (IME), и служба тачпада (копирование/вырезание идёт прямо сюда).
  * Лимит суммарного размера истории: 100 МБ.
- * В системный буфер кладутся только элементы до ~500 КБ,
- * иначе возможен TransactionTooLargeException.
+ * В системный буфер элементы кладутся только по явному запросу (copyToSystem = true).
  */
-class AppClipboardManager(private val context: Context) {
+class AppClipboardManager private constructor(appContext: Context) {
+
+    private val context: Context = appContext
 
     data class ClipItem(
         val text: String,
@@ -24,7 +26,19 @@ class AppClipboardManager(private val context: Context) {
     companion object {
         const val MAX_TOTAL_BYTES = 100L * 1024 * 1024   // 100 МБ
         const val SYSTEM_CLIP_LIMIT = 500L * 1024        // ~500 КБ
+
+        @Volatile
+        private var inst: AppClipboardManager? = null
+
+        fun get(ctx: Context): AppClipboardManager =
+            inst ?: synchronized(this) {
+                inst ?: AppClipboardManager(ctx.applicationContext).also { inst = it }
+            }
     }
+
+    /** Вызывается после любого изменения истории (в главном потоке, если менялось из UI). */
+    @Volatile
+    var onChanged: (() -> Unit)? = null
 
     private val history = LinkedList<ClipItem>()
     private var currentTotalBytes = 0L
@@ -36,7 +50,8 @@ class AppClipboardManager(private val context: Context) {
      * Добавляет текст в начало истории (дубликаты по всему списку удаляются).
      * @param copyToSystem также положить в системный буфер (если элемент не слишком большой)
      */
-    fun add(text: String, copyToSystem: Boolean = true): AddResult {
+    @Synchronized
+    fun add(text: String, copyToSystem: Boolean = false): AddResult {
         if (text.isBlank()) return AddResult.EMPTY
 
         val bytes = text.toByteArray(Charsets.UTF_8).size.toLong()
@@ -68,6 +83,7 @@ class AppClipboardManager(private val context: Context) {
                 // Не критично: элемент всё равно есть в истории
             }
         }
+        onChanged?.invoke()
         return AddResult.ADDED
     }
 
@@ -82,13 +98,23 @@ class AppClipboardManager(private val context: Context) {
         }
     }
 
+    /** Последний (самый свежий) элемент истории или null. */
+    @Synchronized
+    fun latest(): ClipItem? = history.firstOrNull()
+
+    @Synchronized
     fun getHistory(): List<ClipItem> = history.toList()
 
+    @Synchronized
     fun clear() {
         history.clear()
         currentTotalBytes = 0
+        onChanged?.invoke()
     }
 
+    @Synchronized
     fun sizeBytes(): Long = currentTotalBytes
+
+    @Synchronized
     fun sizeCount(): Int = history.size
 }

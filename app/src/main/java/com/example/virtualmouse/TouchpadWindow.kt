@@ -25,6 +25,9 @@ import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** Во сколько раз страница едет быстрее пальца на колёсике (больше — быстрее). */
+private const val WHEEL_GAIN = 2.2f
+
 class TouchpadWindow(
     private val ctx: Context,
     private val wm: WindowManager,
@@ -55,6 +58,11 @@ class TouchpadWindow(
     private var lockBtn: TextView? = null
     private var wheelView: WheelView? = null
     private var ctxMenu: View? = null
+    private var selBtn: TextView? = null
+
+    // Режим выделения текста: касание-удержание + движение = выделение, как зажатая ЛКМ над текстом
+    private var selectMode = false
+    private var selDrag = false
 
     private var held = false
     private var charging = false
@@ -124,6 +132,9 @@ class TouchpadWindow(
     fun hide() {
         stopCharge()
         if (held) release()
+        if (selDrag) { MouseAccessibilityService.instance?.dragEnd(); selDrag = false }
+        MouseAccessibilityService.instance?.scrollEnd()
+        selectMode = false
         closeContextMenu()
         root?.let {
             try {
@@ -227,6 +238,19 @@ class TouchpadWindow(
         lockBtn = v.findViewById(R.id.pad_btn_lock)
         wheelView = v.findViewById(R.id.pad_wheel_view)
         ctxMenu = v.findViewById(R.id.pad_ctx_menu)
+        selBtn = v.findViewById(R.id.pad_btn_sel)
+
+        selBtn?.isSelected = selectMode
+        selBtn?.setOnClickListener {
+            selectMode = !selectMode
+            selBtn?.isSelected = selectMode
+            sounds.beep(if (selectMode) 420 else 240)
+            if (selectMode) Toast.makeText(ctx, "Выделение: тяните по тачпаду (тап — слово)", Toast.LENGTH_SHORT).show()
+        }
+        v.findViewById<View>(R.id.pad_btn_files)?.setOnClickListener {
+            sounds.beep(340)
+            FileManagerLauncher.open(ctx)
+        }
 
         lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
 
@@ -398,56 +422,49 @@ class TouchpadWindow(
     }
 
     private fun bindContextMenu(v: View) {
-        val actions = listOf(
-            R.id.ctx_undo, R.id.ctx_redo, R.id.ctx_cut,
-            R.id.ctx_copy, R.id.ctx_paste, R.id.ctx_delete, R.id.ctx_select_all
-        )
-        actions.forEach { id ->
+        fun act(id: Int, run: (MouseAccessibilityService) -> Unit) {
             v.findViewById<View>(id)?.setOnClickListener {
                 sounds.beep(180)
                 closeContextMenu()
-                svc()?.rightClick(cursor.x, cursor.y)
+                svc()?.let(run)
             }
         }
+        act(R.id.ctx_undo) { it.undo() }
+        act(R.id.ctx_redo) { it.redo() }
+        act(R.id.ctx_cut) { it.cutSelection() }
+        act(R.id.ctx_copy) { it.copySelection() }
+        act(R.id.ctx_paste) { it.pasteFromBuffer() }
+        act(R.id.ctx_delete) { it.deleteSelection() }
+        act(R.id.ctx_select_all) { it.selectAllText() }
     }
 
     private fun bindWheel(w: View) {
         var last = 0f
         var tickAcc = 0f
-        var scrollAcc = 0f
         w.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     closeContextMenu()
                     last = e.rawY
                     tickAcc = 0f
-                    scrollAcc = 0f
                     lastWheelTick = 0f
-                    svc()
+                    // Палец «ставится» на позицию курсора и дальше едет вместе с колёсиком
+                    svc()?.scrollBegin(cursor.x, cursor.y)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = e.rawY - last
                     last = e.rawY
                     tickAcc += dy
-                    scrollAcc += dy
                     wheelView?.setScrollOffset(dy)
 
-                    // Щелчок колёсика каждые 8dp перемещения пальца
                     if (abs(tickAcc - lastWheelTick) >= dp(8)) {
                         sounds.wheelTick()
                         lastWheelTick = tickAcc
                     }
-
-                    // Жест скролла: каждые 18dp пальца прокручиваем длинным свайпом
-                    val step = dp(18).toFloat()
-                    while (abs(scrollAcc) >= step) {
-                        val dir = if (scrollAcc > 0) 1 else -1
-                        scrollAcc -= step * dir
-                        svc()?.scroll(cursor.x, cursor.y, dir, 450f)
-                    }
+                    MouseAccessibilityService.instance?.scrollBy(dy, WHEEL_GAIN)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // Конец касания
+                    MouseAccessibilityService.instance?.scrollEnd()
                 }
             }
             true
@@ -468,23 +485,44 @@ class TouchpadWindow(
                     lx = e.rawX; ly = e.rawY; sx = lx; sy = ly
                     t0 = e.eventTime; far = false
                     cursor.setPressed(true)
+                    if (selectMode && !held) {
+                        // Долгое нажатие на месте курсора начинает выделение, движение тянет его
+                        val a = svc()
+                        if (a != null) {
+                            a.dragStart(cursor.x, cursor.y, 600)
+                            selDrag = true
+                            vibrate(25)
+                        }
+                    }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val k = getSettings().sensitivity
                     cursor.moveBy((e.rawX - lx) * k, (e.rawY - ly) * k)
                     lx = e.rawX; ly = e.rawY
                     if (hypot(lx - sx, ly - sy) > dp(10)) far = true
-                    if (held) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+                    if (held || selDrag) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
                 }
                 MotionEvent.ACTION_UP -> {
                     cursor.setPressed(false)
-                    if (!far && !held && e.eventTime - t0 < 250) {
+                    if (selDrag) {
+                        MouseAccessibilityService.instance?.dragEnd()
+                        selDrag = false
+                        selectMode = false
+                        selBtn?.isSelected = false
+                        sounds.beep(180)
+                    } else if (!far && !held && e.eventTime - t0 < 250) {
                         svc()?.click(cursor.x, cursor.y)
                         sounds.beep(180)
                     }
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     cursor.setPressed(false)
+                    if (selDrag) {
+                        MouseAccessibilityService.instance?.dragEnd()
+                        selDrag = false
+                        selectMode = false
+                        selBtn?.isSelected = false
+                    }
                 }
             }
             true

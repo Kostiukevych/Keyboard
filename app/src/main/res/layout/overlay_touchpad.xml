@@ -45,6 +45,23 @@
                 android:textSize="13sp" />
 
             <TextView
+                android:id="@+id/pad_btn_sel"
+                style="@style/BarKeyStyle"
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:text="Ab"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pad_btn_files"
+                style="@style/BarKeyStyle"
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:text="📁"
+                android:textSize="13sp" />
+
+            <TextView
                 android:id="@+id/pad_btn_kb"
                 style="@style/BarKeyStyle"
                 android:layout_width="32dp"
