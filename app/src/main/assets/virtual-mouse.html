@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#aebde8">
+<title>Virtual Mouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap">
+<style>
+@property --n  {syntax:'<color>';inherits:true;initial-value:#1ff0ff}
+@property --f1 {syntax:'<color>';inherits:true;initial-value:#14427f}
+@property --f2 {syntax:'<color>';inherits:true;initial-value:#0a2a5e}
+:root{
+  --plate:url("vm_plate.jpg");
+  --orig:url("vm_orig.jpg");
+  --W:min(100vw, calc(100dvh * 1024 / 1536));
+  --u:calc(var(--W) / 1024);
+  --cyan:#1ff0ff; --lime:#9dff2a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#a9b8e6;overflow:hidden}
+body::before{content:"";position:fixed;inset:-6%;background:var(--plate) center/cover no-repeat;filter:blur(26px) saturate(1.1);z-index:0}
+#stage{position:relative;z-index:1;background:var(--plate) 0 0/100% 100% no-repeat;width:var(--W);height:calc(var(--W) * 1.5);margin:0 auto;overflow:hidden;
+  font-family:Roboto,"Segoe UI",system-ui,sans-serif;color:#e4f1ff;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.keep{position:absolute;inset:0;background:var(--orig) 0 0/100% 100% no-repeat;pointer-events:none;z-index:6}
+.keep.right{clip-path:polygon(calc(645*var(--u)) 0,100% 0,100% 100%,calc(645*var(--u)) 100%)}
+.keep.hair{clip-path:polygon(calc(611*var(--u)) calc(578*var(--u)),calc(650*var(--u)) calc(578*var(--u)),calc(650*var(--u)) calc(1214*var(--u)),calc(611*var(--u)) calc(1214*var(--u)))}
+.keep.arm{clip-path:polygon(calc(630*var(--u)) calc(385*var(--u)),calc(620*var(--u)) calc(402*var(--u)),calc(603*var(--u)) calc(422*var(--u)),calc(583*var(--u)) calc(446*var(--u)),calc(569*var(--u)) calc(470*var(--u)),calc(566*var(--u)) calc(485*var(--u)),calc(586*var(--u)) calc(504*var(--u)),calc(618*var(--u)) calc(522*var(--u)),calc(632*var(--u)) calc(530*var(--u)),calc(650*var(--u)) calc(530*var(--u)),calc(650*var(--u)) calc(385*var(--u)))}
+.p{position:absolute;z-index:2;left:calc(var(--x)*var(--u));top:calc(var(--y)*var(--u));width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));
+  --n:var(--cyan);--f1:#14427f;--f2:#0a2a5e;
+  transition:--n .5s ease,--f1 .5s ease,--f2 .5s ease}
+.p.on{--n:var(--lime);--f1:#124a31;--f2:#07301f}
+.fr{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible;
+  filter:drop-shadow(0 0 calc(2.5*var(--u)) var(--n)) drop-shadow(0 0 calc(9*var(--u)) var(--n)) drop-shadow(0 0 calc(24*var(--u)) color-mix(in srgb,var(--n) 60%,transparent))}
+.halo{stroke:var(--n);opacity:.35;animation:pulse 3.2s ease-in-out infinite}
+.tube{stroke:var(--n)}
+.inl{stroke:var(--n);opacity:.65}
+@keyframes pulse{0%,100%{opacity:.22}50%{opacity:.55}}
+
+.a{position:absolute;white-space:nowrap}
+.mouse{width:calc(48*var(--u));height:calc(90*var(--u))}
+.mouse svg,.ttl svg,.ring svg,.infoi svg{display:block;width:100%;height:100%}
+.mouse svg{filter:drop-shadow(0 0 calc(5*var(--u)) var(--n))}
+.ttl{width:calc(366*var(--u));height:calc(60*var(--u))}
+.ttl svg{filter:drop-shadow(0 0 calc(5*var(--u)) var(--n)) drop-shadow(0 0 calc(14*var(--u)) var(--n))}
+.ring{width:calc(40*var(--u));height:calc(40*var(--u))}
+.txt{line-height:1.15;font-weight:400;color:#dfecff;letter-spacing:.1px;transition:color .4s,text-shadow .4s}
+.txt.on{color:#f0ffdc;text-shadow:0 0 calc(8*var(--u)) rgba(157,255,42,.65)}
+
+/* галочки */
+.rc{fill:rgba(20,90,160,.3);stroke:var(--cyan);stroke-width:3;transition:stroke .4s,fill .4s}
+.ck{fill:none;stroke:var(--lime);stroke-width:4.4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;transition:stroke-dashoffset .38s ease .12s}
+.ring svg{filter:drop-shadow(0 0 calc(4*var(--u)) var(--cyan));transition:filter .4s}
+.ring.on svg{filter:drop-shadow(0 0 calc(3*var(--u)) var(--lime)) drop-shadow(0 0 calc(10*var(--u)) var(--lime))}
+.ring.on .rc{stroke:var(--lime);fill:rgba(120,255,40,.14)}
+.ring.on .ck{stroke-dashoffset:0}
+
+.btn{display:block;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left;outline:none;transition:transform .08s ease,--n .5s ease,--f1 .5s ease,--f2 .5s ease}
+.btn:hover .fr{filter:drop-shadow(0 0 calc(3*var(--u)) var(--n)) drop-shadow(0 0 calc(12*var(--u)) var(--n)) drop-shadow(0 0 calc(30*var(--u)) var(--n))}
+.btn:active,.btn.press{transform:scale(.985)}
+.btn:active .fr{filter:drop-shadow(0 0 calc(4*var(--u)) #fff) drop-shadow(0 0 calc(16*var(--u)) var(--n)) drop-shadow(0 0 calc(34*var(--u)) var(--n))}
+.btn:focus-visible .fr{filter:drop-shadow(0 0 calc(8*var(--u)) #fff) drop-shadow(0 0 calc(20*var(--u)) var(--n))}
+.ico-w{width:calc(92*var(--u));height:calc(92*var(--u))}
+.ico{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 calc(3*var(--u)) var(--n)) drop-shadow(0 0 calc(8*var(--u)) var(--n))}
+.o1{fill:#0e2d66;stroke:var(--n)}
+.o2{stroke:var(--n);opacity:.7}
+.btn.on .o1{fill:#0b3a26}
+.ig{transition:stroke .4s}
+.chev-w{width:calc(28*var(--u));height:calc(44*var(--u))}
+.chev{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 calc(3*var(--u)) var(--n)) drop-shadow(0 0 calc(8*var(--u)) var(--n))}
+.b1{font-size:calc(27*var(--u));font-weight:500;color:#eaf4ff}
+.b2{font-size:calc(21.5*var(--u));color:#cfe2ff}
+.b1.solo{font-size:calc(29*var(--u))}
+.btn.on .b1{color:#f2ffe2}
+.btn.on .b2{color:#d9f5b8}
+.infoi{width:calc(40*var(--u));height:calc(40*var(--u))}
+.inf{font-size:calc(17.6*var(--u));color:#d3e4ff}
+#toast{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;z-index:20;
+  padding:10px 18px;border-radius:12px;background:rgba(8,30,70,.92);color:#dff1ff;font:500 15px Roboto,system-ui,sans-serif;
+  border:1px solid #1ff0ff;box-shadow:0 0 14px rgba(31,240,255,.7);transition:.22s ease;pointer-events:none;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<main id="stage">
+<div class="p title" style="--x:42;--y:47;--w:600;--h:138;" ><svg class="fr" viewBox="0 0 600 138" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="32,2 586,2 598,14 598,106 568,136 14,136 2,124 2,32" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="32,2 586,2 598,14 598,106 568,136 14,136 2,124 2,32" fill="url(#f1)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="32,2 586,2 598,14 598,106 568,136 14,136 2,124 2,32" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="35,10 583,10 590,17 590,103 565,128 17,128 10,121 10,35" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 32 L32 2 M598 106 L568 136" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M46 2 H102 M554 136 H498" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a mouse" style="left:calc(70*var(--u));top:calc(35*var(--u));" ><svg viewBox="0 0 48 90" aria-hidden="true"><rect x="5" y="4" width="38" height="82" rx="19" fill="none" stroke="#e6f6ff" stroke-width="4.5"/><path d="M24 4 V34" stroke="#e6f6ff" stroke-width="4"/><rect x="21" y="15" width="6" height="12" rx="3" fill="#e6f6ff"/></svg></div><div class="a ttl" style="left:calc(156*var(--u));top:calc(46*var(--u));" ><svg viewBox="0 0 366 60" aria-hidden="true"><text x="0" y="46" textLength="366" lengthAdjust="spacingAndGlyphs" font-family="Orbitron, 'Exo 2', 'Michroma', 'Segoe UI', sans-serif" font-weight="600" font-size="43" fill="#d9eeff">VIRTUAL MOUSE</text></svg></div></div>
+<div class="p status" style="--x:42;--y:209;--w:578;--h:350;" ><svg class="fr" viewBox="0 0 578 350" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="34,2 564,2 576,14 576,316 544,348 14,348 2,336 2,34" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="34,2 564,2 576,14 576,316 544,348 14,348 2,336 2,34" fill="url(#f2)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="34,2 564,2 576,14 576,316 544,348 14,348 2,336 2,34" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="37,10 561,10 568,17 568,313 541,340 17,340 10,333 10,37" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 34 L34 2 M576 316 L544 348" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M48 2 H104 M530 348 H474" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a ring" style="left:calc(50*var(--u));top:calc(43.0*var(--u));" data-k="overlay"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="17"/><path class="ck" d="M11 21 L18 28 L30 13" pathLength="40"/></svg></div><div class="a txt" style="left:calc(117*var(--u));top:calc(63.0*var(--u));transform:translateY(-50%);font-size:calc(24*var(--u));" data-k="overlay">Поверх других окон</div><div class="a ring" style="left:calc(50*var(--u));top:calc(100.19999999999999*var(--u));" data-k="accessibility"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="17"/><path class="ck" d="M11 21 L18 28 L30 13" pathLength="40"/></svg></div><div class="a txt" style="left:calc(117*var(--u));top:calc(120.19999999999999*var(--u));transform:translateY(-50%);font-size:calc(24*var(--u));" data-k="accessibility">Служба специальных возможностей</div><div class="a ring" style="left:calc(50*var(--u));top:calc(157.39999999999998*var(--u));" data-k="enableKeyboard"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="17"/><path class="ck" d="M11 21 L18 28 L30 13" pathLength="40"/></svg></div><div class="a txt" style="left:calc(117*var(--u));top:calc(177.39999999999998*var(--u));transform:translateY(-50%);font-size:calc(24*var(--u));" data-k="enableKeyboard">Клавиатура включена</div><div class="a ring" style="left:calc(50*var(--u));top:calc(214.60000000000002*var(--u));" data-k="pickKeyboard"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="17"/><path class="ck" d="M11 21 L18 28 L30 13" pathLength="40"/></svg></div><div class="a txt" style="left:calc(117*var(--u));top:calc(234.60000000000002*var(--u));transform:translateY(-50%);font-size:calc(24*var(--u));" data-k="pickKeyboard">Клавиатура выбрана</div><div class="a ring" style="left:calc(50*var(--u));top:calc(271.8*var(--u));" data-k="running"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="rc" cx="20" cy="20" r="17"/><path class="ck" d="M11 21 L18 28 L30 13" pathLength="40"/></svg></div><div class="a txt" style="left:calc(117*var(--u));top:calc(291.8*var(--u));transform:translateY(-50%);font-size:calc(24*var(--u));" data-k="running">Оверлей запущен</div></div>
+<button class="p btn" style="--x:43;--y:587;--w:566;--h:104;" type="button" data-action="overlay"><svg class="fr" viewBox="0 0 566 104" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="24,2 542,2 564,24 564,80 542,102 24,102 2,80 2,24" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="24,2 542,2 564,24 564,80 542,102 24,102 2,80 2,24" fill="url(#f4)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="24,2 542,2 564,24 564,80 542,102 24,102 2,80 2,24" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="27,10 539,10 556,27 556,77 539,94 27,94 10,77 10,27" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 24 L24 2 M564 80 L542 102" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M38 2 H94 M528 102 H472" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a ico-w" style="left:calc(41*var(--u));top:calc(6.0*var(--u));" ><svg class="ico" viewBox="0 0 100 100" aria-hidden="true">
+<polygon class="o1" points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" stroke-width="4"/>
+<polygon class="o2" points="32,13 68,13 87,32 87,68 68,87 32,87 13,68 13,32" fill="none" stroke-width="1.6"/>
+<g class="ig" fill="none" stroke="#eef9ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 50 Q50 22 83 50 Q50 78 17 50 Z"/><circle cx="50" cy="50" r="9" fill="#eef9ff" stroke="none"/></g>
+</svg></div><div class="a txt b1" style="left:calc(172*var(--u));top:calc(36.0*var(--u));transform:translateY(-50%);" >Разрешить</div><div class="a txt b2" style="left:calc(172*var(--u));top:calc(68.0*var(--u));transform:translateY(-50%);" >поверх окон</div><div class="a chev-w" style="left:calc(488*var(--u));top:calc(30.0*var(--u));" ><svg class="chev" viewBox="0 0 28 44" aria-hidden="true"><path d="M5 5 L21 22 L5 39" fill="none" stroke="#dff3ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></button>
+<button class="p btn" style="--x:43;--y:710;--w:566;--h:104;" type="button" data-action="accessibility"><svg class="fr" viewBox="0 0 566 104" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f6" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="24,2 542,2 564,24 564,80 542,102 24,102 2,80 2,24" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="24,2 542,2 564,24 564,80 542,102 24,102 2,80 2,24" fill="url(#f6)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="24,2 542,2 564,24 564,80 542,102 24,102 2,80 2,24" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="27,10 539,10 556,27 556,77 539,94 27,94 10,77 10,27" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 24 L24 2 M564 80 L542 102" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M38 2 H94 M528 102 H472" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a ico-w" style="left:calc(41*var(--u));top:calc(6.0*var(--u));" ><svg class="ico" viewBox="0 0 100 100" aria-hidden="true">
+<polygon class="o1" points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" stroke-width="4"/>
+<polygon class="o2" points="32,13 68,13 87,32 87,68 68,87 32,87 13,68 13,32" fill="none" stroke-width="1.6"/>
+<g class="ig" fill="none" stroke="#eef9ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="25" r="6.5" fill="#eef9ff" stroke="none"/><path d="M24 38 Q50 45 76 38"/><path d="M50 43 V57"/><path d="M50 57 L38 80 M50 57 L62 80"/></g>
+</svg></div><div class="a txt b1" style="left:calc(172*var(--u));top:calc(36.0*var(--u));transform:translateY(-50%);" >Включить</div><div class="a txt b2" style="left:calc(172*var(--u));top:calc(68.0*var(--u));transform:translateY(-50%);" >Accessibility</div><div class="a chev-w" style="left:calc(488*var(--u));top:calc(30.0*var(--u));" ><svg class="chev" viewBox="0 0 28 44" aria-hidden="true"><path d="M5 5 L21 22 L5 39" fill="none" stroke="#dff3ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></button>
+<button class="p btn" style="--x:43;--y:833;--w:566;--h:105;" type="button" data-action="enableKeyboard"><svg class="fr" viewBox="0 0 566 105" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f8" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="24,2 542,2 564,24 564,81 542,103 24,103 2,81 2,24" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="24,2 542,2 564,24 564,81 542,103 24,103 2,81 2,24" fill="url(#f8)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="24,2 542,2 564,24 564,81 542,103 24,103 2,81 2,24" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="27,10 539,10 556,27 556,78 539,95 27,95 10,78 10,27" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 24 L24 2 M564 81 L542 103" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M38 2 H94 M528 103 H472" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a ico-w" style="left:calc(41*var(--u));top:calc(6.5*var(--u));" ><svg class="ico" viewBox="0 0 100 100" aria-hidden="true">
+<polygon class="o1" points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" stroke-width="4"/>
+<polygon class="o2" points="32,13 68,13 87,32 87,68 68,87 32,87 13,68 13,32" fill="none" stroke-width="1.6"/>
+<g class="ig" fill="none" stroke="#eef9ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><rect x="17" y="31" width="66" height="40" rx="6"/><g fill="#eef9ff" stroke="none"><rect x="25" y="40" width="6" height="5" rx="1"/><rect x="35" y="40" width="6" height="5" rx="1"/><rect x="45" y="40" width="6" height="5" rx="1"/><rect x="55" y="40" width="6" height="5" rx="1"/><rect x="65" y="40" width="6" height="5" rx="1"/><rect x="25" y="49" width="6" height="5" rx="1"/><rect x="35" y="49" width="6" height="5" rx="1"/><rect x="45" y="49" width="6" height="5" rx="1"/><rect x="55" y="49" width="6" height="5" rx="1"/><rect x="65" y="49" width="6" height="5" rx="1"/><rect x="33" y="59" width="34" height="5" rx="1"/></g></g>
+</svg></div><div class="a txt b1" style="left:calc(172*var(--u));top:calc(36.5*var(--u));transform:translateY(-50%);" >Включить</div><div class="a txt b2" style="left:calc(172*var(--u));top:calc(68.5*var(--u));transform:translateY(-50%);" >клавиатуру</div><div class="a chev-w" style="left:calc(488*var(--u));top:calc(30.5*var(--u));" ><svg class="chev" viewBox="0 0 28 44" aria-hidden="true"><path d="M5 5 L21 22 L5 39" fill="none" stroke="#dff3ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></button>
+<button class="p btn" style="--x:43;--y:957;--w:566;--h:106;" type="button" data-action="pickKeyboard"><svg class="fr" viewBox="0 0 566 106" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f10" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="24,2 542,2 564,24 564,82 542,104 24,104 2,82 2,24" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="24,2 542,2 564,24 564,82 542,104 24,104 2,82 2,24" fill="url(#f10)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="24,2 542,2 564,24 564,82 542,104 24,104 2,82 2,24" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="27,10 539,10 556,27 556,79 539,96 27,96 10,79 10,27" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 24 L24 2 M564 82 L542 104" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M38 2 H94 M528 104 H472" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a ico-w" style="left:calc(41*var(--u));top:calc(7.0*var(--u));" ><svg class="ico" viewBox="0 0 100 100" aria-hidden="true">
+<polygon class="o1" points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" stroke-width="4"/>
+<polygon class="o2" points="32,13 68,13 87,32 87,68 68,87 32,87 13,68 13,32" fill="none" stroke-width="1.6"/>
+<g class="ig" fill="none" stroke="#eef9ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="17" stroke-width="13"/><circle cx="50" cy="50" r="27" stroke-width="8" stroke-dasharray="10.6 10.6" stroke-linecap="butt"/></g>
+</svg></div><div class="a txt b1" style="left:calc(172*var(--u));top:calc(37.0*var(--u));transform:translateY(-50%);" >Выбрать</div><div class="a txt b2" style="left:calc(172*var(--u));top:calc(69.0*var(--u));transform:translateY(-50%);" >клавиатуру</div><div class="a chev-w" style="left:calc(488*var(--u));top:calc(31.0*var(--u));" ><svg class="chev" viewBox="0 0 28 44" aria-hidden="true"><path d="M5 5 L21 22 L5 39" fill="none" stroke="#dff3ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></button>
+<button class="p btn" style="--x:43;--y:1083;--w:566;--h:115;" type="button" data-action="stop"><svg class="fr" viewBox="0 0 566 115" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f12" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="24,2 542,2 564,24 564,91 542,113 24,113 2,91 2,24" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="24,2 542,2 564,24 564,91 542,113 24,113 2,91 2,24" fill="url(#f12)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="24,2 542,2 564,24 564,91 542,113 24,113 2,91 2,24" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="27,10 539,10 556,27 556,88 539,105 27,105 10,88 10,27" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 24 L24 2 M564 91 L542 113" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M38 2 H94 M528 113 H472" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a ico-w" style="left:calc(41*var(--u));top:calc(11.5*var(--u));" ><svg class="ico" viewBox="0 0 100 100" aria-hidden="true">
+<polygon class="o1" points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" stroke-width="4"/>
+<polygon class="o2" points="32,13 68,13 87,32 87,68 68,87 32,87 13,68 13,32" fill="none" stroke-width="1.6"/>
+<g class="ig" fill="none" stroke="#eef9ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><rect x="29" y="29" width="42" height="42" rx="7" stroke-width="6"/></g>
+</svg></div><div class="a txt b1 solo" style="left:calc(172*var(--u));top:calc(57.5*var(--u));transform:translateY(-50%);" >Стоп</div><div class="a chev-w" style="left:calc(488*var(--u));top:calc(35.5*var(--u));" ><svg class="chev" viewBox="0 0 28 44" aria-hidden="true"><path d="M5 5 L21 22 L5 39" fill="none" stroke="#dff3ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></button>
+<div class="p info" style="--x:42;--y:1232;--w:562;--h:156;" ><svg class="fr" viewBox="0 0 562 156" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="f13" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--f1)"/><stop offset="1" style="stop-color:var(--f2)"/></linearGradient></defs>
+<polygon class="halo" points="30,2 548,2 560,14 560,126 532,154 14,154 2,142 2,30" fill="none" stroke-width="10" stroke-linejoin="round"/>
+<polygon class="tube" points="30,2 548,2 560,14 560,126 532,154 14,154 2,142 2,30" fill="url(#f13)" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon class="core" points="30,2 548,2 560,14 560,126 532,154 14,154 2,142 2,30" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="1.2" stroke-linejoin="round"/>
+<polygon class="inl" points="33,10 545,10 552,17 552,123 529,146 17,146 10,139 10,33" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+<path d="M2 30 L30 2 M560 126 L532 154" stroke="#fff" stroke-opacity=".95" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+<path d="M44 2 H100 M518 154 H462" stroke="#fff" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"/>
+</svg><div class="a infoi" style="left:calc(38*var(--u));top:calc(34*var(--u));" ><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="#e1f3ff" stroke-width="3"/><circle cx="20" cy="11.5" r="2.4" fill="#e1f3ff"/><path d="M20 17.5 V29" stroke="#e1f3ff" stroke-width="3.2" stroke-linecap="round"/></svg></div><div class="a txt inf" style="left:calc(99*var(--u));top:calc(41*var(--u));transform:translateY(-50%);" >На Android 13+ при установке АРК не из магазина:</div><div class="a txt inf" style="left:calc(99*var(--u));top:calc(66*var(--u));transform:translateY(-50%);" >Настройки → Приложения → Virtual Mouse →</div><div class="a txt inf" style="left:calc(99*var(--u));top:calc(91*var(--u));transform:translateY(-50%);" >Разрешить ограниченные настройки,</div><div class="a txt inf" style="left:calc(99*var(--u));top:calc(116*var(--u));transform:translateY(-50%);" >и только потом включайте Accessibility.</div></div>
+<div class="keep right"></div><div class="keep hair"></div><div class="keep arm"></div>
+</main>
+<div id="toast" role="status"></div>
+<script>
+(function(){
+  var st={overlay:false,accessibility:false,enableKeyboard:false,pickKeyboard:false,running:false}, stopped=false;
+  var act2key={overlay:'overlay',accessibility:'accessibility',enableKeyboard:'enableKeyboard',pickKeyboard:'pickKeyboard',stop:'running'};
+  var names={overlay:'Разрешить поверх окон',accessibility:'Включить Accessibility',enableKeyboard:'Включить клавиатуру',pickKeyboard:'Выбрать клавиатуру',stop:'Стоп'};
+  var toast=document.getElementById('toast'),tm;
+  function say(t){toast.textContent=t;toast.classList.add('on');clearTimeout(tm);tm=setTimeout(function(){toast.classList.remove('on')},1500)}
+  function render(){
+    document.querySelectorAll('[data-k]').forEach(function(e){e.classList.toggle('on',!!st[e.dataset.k])});
+    document.querySelectorAll('.btn').forEach(function(b){b.classList.toggle('on',!!st[act2key[b.dataset.action]])});
+  }
+  function auto(){ if(st.overlay&&st.accessibility&&st.enableKeyboard&&st.pickKeyboard&&!stopped) st.running=true; if(!(st.overlay&&st.accessibility&&st.enableKeyboard&&st.pickKeyboard)) st.running=false; }
+  /* Android -> страница: window.setState({overlay:true, accessibility:true, enableKeyboard:true, pickKeyboard:true, running:true}) */
+  window.setState=function(o){for(var k in o) if(k in st) st[k]=!!o[k]; render()};
+  document.querySelectorAll('.btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var a=b.dataset.action, br=window.Android||window.AndroidBridge;
+      if(br&&typeof br[a]==='function'){try{br[a]()}catch(e){say('Ошибка: '+a)} return}
+      /* демо без Android */
+      if(a==='stop'){ stopped=true; st.running=false; say('Оверлей остановлен'); }
+      else{ var k=act2key[a]; st[k]=!st[k]; stopped=false; auto(); say(names[a]+(st[k]?' ✓':'')); }
+      render();
+    });
+  });
+  render();
+})();
+</script>
+</body>
+</html>

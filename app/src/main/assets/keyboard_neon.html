@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><script>if(window.Android)document.documentElement.className="and"</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Neon Keyboard</title>
+<style>
+:root{--bg:#02030a}
+html.and,html.and body{background:transparent!important}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",Roboto,system-ui,sans-serif}
+body{display:flex;flex-direction:column;justify-content:flex-end}
+
+/* ---------- корпус клавиатуры ---------- */
+#kb{--hue:235;--c:hsl(var(--hue) 100% 58%);--cl:hsl(var(--hue) 100% 84%);
+  position:relative;padding:8px 8px 14px;isolation:isolate;overflow:hidden;background:#02030a;border-radius:22px 22px 0 0;
+  border-top:1px solid color-mix(in srgb,var(--c) 60%,transparent);
+  box-shadow:0 -8px 30px color-mix(in srgb,var(--c) 25%,transparent),inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 40px rgba(0,0,0,.55)}
+.waves{position:absolute;inset:0;z-index:-2;background:#02030a center/cover no-repeat}
+#kb::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:rgba(2,3,10,var(--dim,.3))}
+.bar{display:flex;gap:8px;align-items:center;height:32px;margin-bottom:8px}
+.bar .st{flex:1;text-align:center;font-size:11px;letter-spacing:.25em;color:var(--cl);text-transform:uppercase;text-shadow:0 0 8px var(--c);background:rgba(2,3,10,.55);border-radius:10px;padding:6px 0}
+/* утопленная «ванна» под клавиши — глубина */
+.board{display:flex;flex-direction:column;gap:var(--g,4px);padding:8px;border-radius:18px;background:rgba(0,0,0,.3);
+  box-shadow:inset 0 6px 16px rgba(0,0,0,.8),inset 0 0 0 1px rgba(255,255,255,.06),0 1px 0 rgba(255,255,255,.12)}
+.row{display:flex;gap:var(--g,4px);width:100%;height:var(--d,34px)}
+
+/* ---------- клавиша: гнездо (.s) + полупрозрачная кнопка (.o) ---------- */
+.k{position:relative;flex:var(--w,1) 1 0;min-width:0;height:var(--d,34px);cursor:pointer}
+.s{position:absolute;inset:calc(var(--g,4px)*-.45);border-radius:calc(var(--d,34px)*.36);background:rgba(0,0,0,.38);
+  box-shadow:inset 0 3px 6px rgba(0,0,0,.85),inset 0 -3px 8px color-mix(in srgb,var(--c) 50%,transparent),0 1px 0 rgba(255,255,255,.09),0 0 6px color-mix(in srgb,var(--c) 30%,transparent)}
+.o{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:calc(var(--d,34px)*.3);
+  font-size:calc(var(--d,34px)*.44);font-weight:600;color:var(--cl);
+  text-shadow:0 0 3px var(--c),0 0 9px var(--c),0 0 18px var(--c);
+  background:linear-gradient(180deg,rgba(62,62,72,.62) 0%,rgba(30,30,38,.58) 55%,rgba(18,18,24,.64) 100%);
+  border:1px solid rgba(255,255,255,.1);border-bottom-color:color-mix(in srgb,var(--c) 75%,transparent);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),inset 0 -3px 5px rgba(0,0,0,.4),0 3px 0 rgba(0,0,0,.65),0 6px 8px rgba(0,0,0,.5)}
+.k.tx .o{font-size:calc(var(--d,34px)*.3);letter-spacing:.02em}
+.o small{position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:calc(var(--d,34px)*.2);line-height:1;color:var(--c);text-shadow:none;font-weight:400;text-transform:uppercase;opacity:.9}
+/* нажатие и включённые модификаторы: кнопка вдавлена, гнездо светится */
+.k.p .o,.k.on .o{transform:translateY(3px);color:#fff;border-color:var(--c);
+  background:linear-gradient(180deg,rgba(10,10,14,.7),rgba(24,24,30,.62));
+  text-shadow:0 0 4px #fff,0 0 12px var(--c),0 0 22px var(--c);
+  box-shadow:inset 0 3px 6px rgba(0,0,0,.8),inset 0 0 12px color-mix(in srgb,var(--c) 40%,transparent),0 0 0 1px var(--c)}
+.k.p .s,.k.on .s{box-shadow:inset 0 3px 6px rgba(0,0,0,.9),inset 0 0 16px var(--c),0 0 14px var(--c),0 0 28px color-mix(in srgb,var(--c) 60%,transparent)}
+
+/* сетки (emoji / unicode) */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(var(--d,34px)*1.05),1fr));gap:var(--g,4px);overflow-y:auto;overflow-x:hidden;
+  height:calc(var(--d,34px)*5 + var(--g,4px)*4);width:100%;align-content:start;padding:4px;touch-action:pan-y;scrollbar-width:none}
+.grid::-webkit-scrollbar{display:none}
+.gt{grid-column:1/-1;font-size:11px;color:var(--cl);text-shadow:0 0 6px var(--c);letter-spacing:.08em;padding:2px 2px 0}
+
+/* верхняя панель */
+.bk{display:inline-flex;align-items:center;justify-content:center;height:30px;min-width:44px;padding:0 12px;border-radius:12px;font-size:12px;font-weight:600;color:var(--cl);cursor:pointer;
+  text-shadow:0 0 6px var(--c);background:linear-gradient(180deg,rgba(62,62,72,.7),rgba(22,22,27,.7));border:1px solid rgba(255,255,255,.08);border-bottom-color:var(--c);
+  box-shadow:0 4px 8px -2px var(--c),0 4px 6px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12)}
+.bk:active{transform:translateY(2px);border-color:var(--c);box-shadow:0 0 14px var(--c),inset 0 0 8px color-mix(in srgb,var(--c) 50%,transparent)}
+#bCol{min-width:30px;width:30px;padding:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,var(--c) 55%,color-mix(in srgb,var(--c) 40%,#000))}
+
+/* выбор скина */
+.skp{position:absolute;inset:0;z-index:6;background:rgba(2,3,10,.94);padding:10px;display:none;flex-direction:column;overflow:hidden}
+.skp.show{display:flex}
+.skh{display:flex;align-items:center;justify-content:space-between;color:var(--cl);font-size:13px;font-weight:600;margin-bottom:8px;text-shadow:0 0 6px var(--c)}
+.skg{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-content:start;touch-action:pan-y}
+.skc{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:#8aa0b8;font-size:10px;text-align:center}
+.skt{width:100%;aspect-ratio:1;border-radius:14px;background:#0a0c14 center/cover no-repeat;border:1px solid rgba(255,255,255,.08);border-bottom-color:var(--c);box-shadow:0 4px 8px -2px var(--c)}
+.skc.sel .skt{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 14px var(--c)}
+.skc.sel{color:#fff}
+</style>
+</head>
+<body>
+<div id="kb">
+  <div class="waves" id="waves"></div>
+  <div class="bar">
+    <div class="bk" id="bLang">РУС</div>
+    <div class="bk" id="bCol" title="Сменить скин"></div>
+    <div class="st">Neon Keys</div>
+    <div class="bk" id="bSet">⚙</div>
+    <div class="bk" id="bHide">⌄</div>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="skp" id="skp"><div class="skh"><span>Скины</span><div class="bk" id="skx">✕</div></div><div class="skg" id="skg"></div></div>
+</div>
+
+<script>
+/* ================= Раскладка (как в KeyboardLayouts.kt) =================
+   K(label, code, weight, latin, text): code пустой = вставка текста           */
+const EN3="q w e r t y u i o p [ ]".split(" "), RU3="й ц у к е н г ш щ з х ъ".split(" ");
+const EN4="a s d f g h j k l ; '".split(" "),   RU4="ф ы в а п р о л д ж э".split(" ");
+const EN5="z x c v b n m , . /".split(" "),     RU5="я ч с м и т ь б ю .".split(" ");
+const UK={"ъ":"ї","ы":"і","э":"є"};
+const SH_EN={"`":"~","1":"!","2":"@","3":"#","4":"$","5":"%","6":"^","7":"&","8":"*","9":"(","0":")","-":"_","=":"+","[":"{","]":"}",";":":","'":'"',",":"<",".":">","/":"?"};
+const SH_RU={"1":"!","2":'"',"3":"№","4":";","5":"%","6":":","7":"?","8":"*","9":"(","0":")","-":"_","=":"+",".":","};
+const LANGS=["EN","РУС","УКР"];
+const K=(label,code="",w=1,latin="",text)=>[label,code,w,latin,text];
+const c=(code,label,w=1)=>K(label,code,w);
+const ch=line=>line.split(" ").filter(Boolean).map(x=>K(x));
+const lr=(ru,en,l)=>ru.map((r,i)=>K(l==0?en[i]:(l==2&&UK[r])||r,"",1,en[i]));
+const F=()=>({k:[c("ESC","Esc"),...Array.from({length:12},(_,i)=>c("F"+(i+1),"F"+(i+1))),c("CLIP","📋",1.5)]});
+const MB=o=>({k:[c("CTRL","Ctrl",1.4),c("ALT","Alt"),c("SPACE","Space",4),c("L:emoji","😊"),c("L:unicode","⌘"),c("L:letters","АБВ",1.4),o,c("ENTER","Enter",1.6)]});
+const EMOJI="😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🥵 🥶 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖 🎃 😺 💋 💌 💘 💝 💖 💗 💓 💞 💕 💟 ❣️ 💔 ❤️ 🧡 💛 💚 💙 💜 🤎 🖤 🤍 💯 💢 💥 💫 💦 💨 💬 💭 💤 👋 🤚 🖐️ ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦿 🦵 🦶 👂 👃 🧠 🦷 🦴 👀 👁️ 👅 👄 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🌽 🥕 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🌭 🍔 🍟 🍕 🥪 🥙 🧆 🌮 🌯 🥗 🥘 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 ☕ 🍵 🧃 🥤 🍶 🍺 🍻 🥂 🍷 ⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🏓 🏸 🏒 🏑 🥍 🏏 🥅 ⛳ 🏹 🎣 🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🚚 🚛 🚜 🛴 🚲 🛵 🏍️ 🛺 🚨 🚔 ✈️ 🛫 🛬 🛩️ 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ ⛽ 🚧 🚦 ⌚ 📱 💻 ⌨️ 🖥️ 🖨️ 🖱️ 🕹️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 💡 🔦 🕯️ 💸 💵 💴 💶 💷 💰 💳 💎 ⚖️ 🧰 🔧 🔨 ⚒️ 🛠️ ⛏️ 🔩 ⚙️".split(" ");
+const BIDI=[["RLO","\u202E"],["LRO","\u202D"],["RLM","\u200F"],["LRM","\u200E"],["RLE","\u202B"],["LRE","\u202A"],["PDF","\u202C"],["FSI","\u2068"],["PDI","\u2069"],["RLI","\u2067"],["LRI","\u2066"],["ALM","\u061C"]];
+const LAYERS={
+ letters:l=>[F(),
+  {k:[K(l==0?"`":l==1?"ё":"'","",1,"`"),..."1 2 3 4 5 6 7 8 9 0 - =".split(" ").map(x=>K(x,"",1,x)),c("BKSP","⌫",1.5)]},
+  {k:[c("TAB","Tab",2.5),...lr(RU3,EN3,l)]},
+  {k:[c("CAPS","Caps",1.75),...lr(RU4,EN4,l),c("ENTER","Enter",1.75)]},
+  {k:[c("SHIFT","Shift",2.25),...lr(RU5,EN5,l),c("SHIFT","Shift",2.25)]},
+  {k:[c("CTRL","Ctrl",1.4),c("WIN","Win"),c("ALT","Alt"),c("SPACE","Space",6.3),c("L:unicode","⌘"),c("L:symbols","?123",1.4),c("ALT","Alt"),c("CTRL","Ctrl",1.4)]}],
+ symbols:()=>[F(),
+  {k:[...ch("1 2 3 4 5 6 7 8 9 0 № %"),c("BKSP","⌫",2.5)]},
+  {k:ch("+ − = / × ( ) [ ] { } & _")},
+  {k:ch("€ $ ₽ £ ¥ ₴ ₹ ₩ ₺ ₪ ¢ ₿")},
+  {k:[c("LEFT","←"),c("RIGHT","→"),c("UP","↑"),c("DOWN","↓"),...ch("! ? , . ; : ' \"")]},
+  MB(c("L:more","#+=",1.4))],
+ more:()=>[
+  {k:[c("CLIP","📋",1.5),c("HOME","Home"),c("END","End"),c("PGUP","PgUp"),c("PGDN","PgDn"),c("DEL","Del")]},
+  {k:[...ch("~ ` ^ ° √ π Δ ∑ ≠ ≤ ≥ ∞"),c("BKSP","⌫",1.5)]},
+  {k:ch("• · … – — « » „ “ ” ‘ ’")},
+  {k:ch("¶ ♠ ♥ ♦ ♣ ★ ☆ ✓ ✗ ⚡ ❤ ☺ ☻")},
+  {k:ch("°C °F № µ Ω λ α β γ → ↔ ⇄")},
+  MB(c("L:symbols","?123",1.4))],
+ emoji:()=>({kind:"emoji",sections:[{k:EMOJI.map(x=>K(x))}],
+  bottom:{k:[c("L:letters","АБВ",1.4),c("L:symbols","?123",1.4),c("SPACE","Space",5),c("BKSP","⌫",1.4)]}}),
+ unicode:()=>({kind:"unicode",sections:[
+  {t:"Направление текста (BiDi)",k:BIDI.map(([n,x])=>K(n,"",1,"",x))},
+  {t:"Стрелки и указатели",k:ch("← → ↑ ↓ ↔ ↕ ⇐ ⇒ ⇑ ⇓ ⇔ ⇕ ↖ ↗ ↘ ↙ ↺ ↻ ⇄ ⇆ ⇋ ⇌ ⇧ ⇩ ⏎ ⏏ ⏩ ⏪ ⏫ ⏬ ▶ ◀ ▲ ▼ ➡ ⬅ ⬆ ⬇ ➤ ➔ ➜ ➞ ➟ ➠ ⟶ ⟵ ⟷ ⟹")},
+  {t:"Математика",k:ch("± × ÷ ≠ ≈ ≡ ≤ ≥ < > ∞ √ ∑ ∏ ∫ ∂ ∇ ∆ π µ Ω λ α β γ δ ε θ φ ψ ω % ‰ ‱ ° ′ ″ ∅ ∈ ∉ ⊂ ⊃ ∪ ∩ ∨ ∧ ¬ ⊕")},
+  {t:"Спецсимволы",k:ch("§ ¶ © ® ™ † ‡ • · … — – « » „ “ ” ‘ ’ ′ ″ ‴ ␣ ⌘ ⌥ ⇧ ⌫ ⎋ ⏎ ☰ ☱ ☲ ☳ ☴ ♠ ♥ ♦ ♣ ★ ☆ ✓ ✗ ⚡ ❤ ☺ ☻ № ⏳")}],
+  bottom:{k:[c("CTRL","Ctrl",1.2),c("ALT","Alt"),c("SPACE","Space",4),c("L:letters","АБВ",1.4),c("L:symbols","?123",1.4),c("BKSP","⌫",1.4)]}})
+};
+
+/* ================= Состояние ================= */
+const S={lang:0,layer:"letters",shift:false,caps:false,ctrl:false,alt:false,win:false};
+const board=document.getElementById("board");
+const MODS={SHIFT:"shift",CAPS:"caps",CTRL:"ctrl",ALT:"alt",WIN:"win"};
+
+/* Выход клавиатуры: событие "neonkey", window.onNeonKey(d) или Android.onKey(json) */
+function emit(d){
+  document.dispatchEvent(new CustomEvent("neonkey",{detail:d}));
+  if(window.onNeonKey) window.onNeonKey(d);
+  if(window.Android&&Android.onKey) Android.onKey(JSON.stringify(d));
+}
+function shifted(s){
+  if(s.length!=1) return s;
+  if(/\p{L}/u.test(s)) return (S.shift||S.caps)?s.toUpperCase():s;
+  return S.shift?((S.lang==0?SH_EN:SH_RU)[s]||s):s;
+}
+function press(k){
+  const [label,code,,latin,text]=k;
+  if(MODS[code]){const m=MODS[code];S[m]=!S[m];render();return}
+  if(code.startsWith("L:")){S.layer=code.slice(2);render();return}
+  const d={code,label,ctrl:S.ctrl,alt:S.alt,shift:S.shift,caps:S.caps,win:S.win,latin:latin||""};
+  if(!code) d.text=text!==undefined?text:shifted(label);
+  emit(d);
+  if(S.shift||S.ctrl||S.alt||S.win){S.shift=S.ctrl=S.alt=S.win=false;render()}
+}
+
+/* ================= Скины (картинки внутри файла) =================
+   Чтобы добавить скин: допиши строку в SKINS, где img — 'data:image/jpeg;base64,...'.
+   hue — цвет неона (0–360), pos — какую часть картинки показывать, dim — затемнение (0–1). null = без картинки. */
+const SKINS=[
+  {name:"Синие волны", hue:235, pos:"center 70%", dim:0.28, img:'kb_theme_1.jpg'},
+  {name:"Нейроны", hue:265, pos:"center 45%", dim:0.2, img:'kb_theme_2.jpg'},
+  {name:"Череп", hue:110, pos:"center 45%", dim:0.3, img:'kb_theme_3.jpg'},
+  {name:"Циан соты", hue:185, pos:"center 50%", dim:0.25, img:'kb_theme_4.jpg'},
+  {name:"Мрамор", hue:215, pos:"center 45%", dim:0.5, img:'kb_theme_5.jpg'},
+  {name:"Серые соты", hue:195, pos:"center 40%", dim:0.5, img:'kb_theme_6.jpg'},
+  {name:"Зелёные соты", hue:130, pos:"center 55%", dim:0.25, img:'kb_theme_7.jpg'},
+  {name:"Пляж спереди", hue:185, pos:"center 50%", dim:0.4, img:'kb_theme_8.jpg'},
+  {name:"Без скина", hue:235, pos:"center", dim:.3, img:null},
+];
+let ci=0;
+function applySkin(){
+  const k=SKINS[ci], kb=document.getElementById("kb"), w=document.getElementById("waves");
+  kb.style.setProperty("--hue",k.hue);kb.style.setProperty("--dim",k.dim==null?.3:k.dim);
+  w.style.backgroundImage=k.img?'url("'+k.img+'")':'none';
+  w.style.backgroundPosition=k.pos||"center";
+  try{localStorage.setItem("neonSkin",ci)}catch(e){}
+}
+
+/* ================= Отрисовка ================= */
+function sizes(){
+  const W=(board.clientWidth||innerWidth-32)-16, g=W<520?4:7;
+  const u=(W-g*13)/14.5, d=Math.max(24,Math.min(56,Math.round(u*1.45)));
+  board.style.setProperty("--d",d+"px");board.style.setProperty("--g",g+"px");
+}
+function mkKey(k,kind){
+  const [label,code,w=1,latin,text]=k, el=document.createElement("div"), s=document.createElement("div"), o=document.createElement("div");
+  el.className="k"+(([...label].length>1&&kind!="emoji")?" tx":"");el.style.setProperty("--w",w);
+  s.className="s";o.className="o";
+  o.textContent=code?label:(text!==undefined?label:shifted(label));
+  if(code=="SPACE")o.textContent=LANGS[S.lang];
+  const m=MODS[code];if(m&&S[m])el.classList.add("on");
+  if(code=="L:"+S.layer)el.classList.add("on");
+  if(latin&&latin!==label&&(S.lang!=0||S.ctrl)){const sm=document.createElement("small");sm.textContent=latin;o.appendChild(sm)}
+  el.appendChild(s);el.appendChild(o);
+  const down=e=>{e.preventDefault();el.classList.add("p");navigator.vibrate&&navigator.vibrate(8)};
+  const up=e=>{if(el.classList.contains("p")){el.classList.remove("p");press(k)}};
+  const off=()=>el.classList.remove("p");
+  el.addEventListener("pointerdown",down);el.addEventListener("pointerup",up);
+  el.addEventListener("pointerleave",off);el.addEventListener("pointercancel",off);
+  return el;
+}
+function mkRow(r,kind){const rd=document.createElement("div");rd.className="row";r.k.forEach(k=>rd.appendChild(mkKey(k,kind)));return rd}
+function reportH(){if(window.Android&&Android.onSize){var h=document.getElementById("kb").offsetHeight;Android.onSize(h)}}
+function render(){
+  const L=S.layer=="letters"?LAYERS.letters(S.lang):LAYERS[S.layer]();
+  sizes();board.innerHTML="";
+  if(Array.isArray(L)) L.forEach(r=>board.appendChild(mkRow(r)));
+  else{
+    const g=document.createElement("div");g.className="grid";
+    L.sections.forEach(sec=>{
+      if(sec.t){const t=document.createElement("div");t.className="gt";t.textContent=sec.t;g.appendChild(t)}
+      sec.k.forEach(k=>g.appendChild(mkKey(k,L.kind)));
+    });
+    board.appendChild(g);board.appendChild(mkRow(L.bottom));
+  }
+  document.getElementById("bLang").textContent=LANGS[S.lang];
+  reportH();
+}
+
+/* ================= Выбор скина ================= */
+const skp=document.getElementById("skp"), skg=document.getElementById("skg");
+function openSkins(){
+  skg.innerHTML="";
+  SKINS.forEach((k,i)=>{
+    const c=document.createElement("div");c.className="skc"+(i==ci?" sel":"");
+    const t=document.createElement("div");t.className="skt";
+    t.style.setProperty("--c","hsl("+k.hue+" 100% 58%)");
+    if(k.img)t.style.backgroundImage='url("'+k.img+'")';
+    c.appendChild(t);c.appendChild(document.createTextNode(k.name));
+    c.addEventListener("click",()=>{ci=i;applySkin();skp.classList.remove("show")});
+    skg.appendChild(c);
+  });
+  skp.classList.add("show");
+}
+
+/* ================= Верхняя панель ================= */
+const bind=(id,fn)=>document.getElementById(id).addEventListener("pointerup",e=>{e.preventDefault();fn()});
+bind("bLang",()=>{S.lang=(S.lang+1)%3;S.layer="letters";render();emit({code:"LANG",lang:S.lang})});
+window.setLang=n=>{S.lang=n;S.layer="letters";render()};
+bind("bCol",openSkins);
+bind("skx",()=>skp.classList.remove("show"));
+bind("bSet",()=>emit({code:"SETTINGS"}));
+bind("bHide",()=>emit({code:"HIDE"}));
+try{ci=Math.min(+localStorage.getItem("neonSkin")||0,SKINS.length-1)}catch(e){}
+addEventListener("resize",render);render();applySkin();
+</script>
+</body>
+</html>
