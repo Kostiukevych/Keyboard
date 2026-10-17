@@ -16,10 +16,11 @@ body{background:radial-gradient(ellipse at 50% 30%,var(--bg1),var(--bg2));overfl
 .tgt.hover{border-color:var(--ink)}
 .tgt.on{background:var(--ink);color:var(--bg2)}
 .tgt.alt{background:transparent;border:2px dashed var(--ink);color:var(--ink)}
-.mouse{position:relative;width:min(92vw,310px);aspect-ratio:400/460;filter:drop-shadow(0 6px 4px rgba(0,0,0,.5)) drop-shadow(0 26px 22px rgba(0,0,0,.5));touch-action:none}
+.mouse{position:relative;width:min(92vw,310px);aspect-ratio:400/460;touch-action:none}
+.mouse svg{filter:drop-shadow(0 6px 4px rgba(0,0,0,.5)) drop-shadow(0 26px 22px rgba(0,0,0,.5))}
 .mouse svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.mouse canvas{position:absolute;left:18.75%;top:13.04%;width:45%;height:39.13%;border-radius:50%;cursor:grab;touch-action:none;transition:filter .2s}
-.mouse canvas.drag{cursor:grabbing;filter:drop-shadow(0 0 14px var(--acc))}
+.mouse canvas{position:absolute;left:18.75%;top:13.04%;width:45%;height:39.13%;border-radius:50%;cursor:grab;touch-action:none;will-change:transform}
+.mouse canvas.drag{cursor:grabbing;box-shadow:0 0 14px var(--acc)}
 .key{cursor:pointer;transition:transform .08s,filter .08s;transform-box:fill-box}
 .key.pressed{transform:translateY(2.5px);filter:brightness(.85)}
 .mouse[data-s=glass] .key>.b{fill:url(#kyg);stroke:var(--acc);stroke-opacity:.9}
@@ -53,6 +54,14 @@ html.and body{background:transparent;gap:0}
 html.and .targets,html.and #cur{display:none!important}
 html.and .mouse{width:auto;height:min(100vh,115vw);max-width:100vw}
 html.and .dlg{max-height:94vh}
+html.and{background:transparent}
+html.and .mouse svg{filter:drop-shadow(0 8px 6px rgba(0,0,0,.55))}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mgrid button{padding:9px 8px;border-radius:14px;text-align:center}
+.mgrid button.wide{grid-column:1/-1}
+html.pm body{justify-content:flex-start;gap:6px;padding-top:6px}
+html.and.pm .mouse{height:24vh;flex:none;max-width:60vw}
+html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:none;max-height:none;flex:1 1 auto;min-height:0;margin:0 8px 8px;overflow:auto}
 </style>
 </head>
 <body>
@@ -125,8 +134,8 @@ html.and .dlg{max-height:94vh}
 <script>
 (function(){
   var cv=document.getElementById('ball'),ctx=cv.getContext('2d'),S=360,C=180,R=150,K=1/83,SENS=2.4,i;
-  var pts=[];
-  for(i=0;i<650;i++){
+  var dirty=true,SK0,FIT0,pts=[];
+  for(i=0;i<420;i++){
     var x=Math.random()*2-1,y=Math.random()*2-1,z=Math.random()*2-1,l=Math.hypot(x,y,z);
     if(l<.1||l>1){i--;continue}
     pts.push({k:Math.random(),x:x/l,y:y/l,z:z/l,s:.6+Math.random()*1.7,a:.35+Math.random()*.65});
@@ -138,7 +147,7 @@ html.and .dlg{max-height:94vh}
   var root=document.documentElement,mouse=document.getElementById('mouse'),dlg=document.getElementById('dlg'),db=document.getElementById('db');
 
   function rot(dx,dy){
-    spin+=dx-dy;
+    spin+=dx-dy;dirty=true;
     var t=dx*K,f=-dy*K,ct=Math.cos(t),st=Math.sin(t),cp=Math.cos(f),sp=Math.sin(f);
     for(var j=0;j<pts.length;j++){var p=pts[j],x1=p.x*ct+p.z*st,z1=-p.x*st+p.z*ct;
       p.x=x1;var y2=p.y*cp-z1*sp;p.z=p.y*sp+z1*cp;p.y=y2;}
@@ -214,8 +223,10 @@ html.and .dlg{max-height:94vh}
   }
   function draw(){ST=='glass'?drawGlass():ST=='holo'?drawHolo():ST=='bubble'?drawBubble():drawClassic()}
 
-  /* курсор */
-  var cur=document.getElementById('cur'),cx=innerWidth/2,cy=innerHeight/2,hov=null,CUR={sh:'arrow',st:'fill',col:'#ffffff',glow:0,sz:28};
+  /* ===== курсор: в браузере рисуется здесь, в приложении — нативным оверлеем ===== */
+  var AND=!!window.Android,DPR=window.devicePixelRatio||1;
+  var cur=document.getElementById('cur'),cx=innerWidth/2,cy=innerHeight/2,hov=null,
+      CUR={sh:'arrow',st:'fill',col:AND?'#35e0ff':'#ffffff',glow:0,sz:AND?40:28},SENS=2.4,ROT=0,WS=1;
   var P=function(a,o){return 'M'+a.map(function(q){return (q[0]*2+o)+' '+(q[1]*2+o)}).join('L')+'Z'};
   var SH={arrow:{d:'M3 2L3 23L8.5 18L12.5 27L16 25.5L12 16.8L19.5 16.8Z',x:3,y:2},
     sharp:{d:'M10 7.7L23.4 20.8H15.7L10 26.1Z',x:10,y:7.7},
@@ -228,6 +239,7 @@ html.and .dlg{max-height:94vh}
     tri:{d:'M16 4L28 27H4Z',x:16,y:16}};
   function pth(d,f,k,w,j){return '<path d="'+d+'" style="fill:'+f+';stroke:'+k+'" stroke-width="'+w+'" stroke-linejoin="'+(j||'round')+'" stroke-linecap="round"/>'}
   function drawCur(){
+    if(AND)return;
     var s=SH[CUR.sh],c=CUR.col,st=CUR.st,h;
     if(s.line||st=='line')h=pth(s.d,'none','#06232b',5.5,s.j)+pth(s.d,'none',c,2.6,s.j);
     else if(st=='dark')h=pth(s.d,'#111',c,2.2,s.j);
@@ -236,28 +248,48 @@ html.and .dlg{max-height:94vh}
     cur.style.filter=CUR.glow?'drop-shadow(0 0 3px '+c+') drop-shadow(0 0 8px '+c+')':'none';place();
   }
   function place(){var s=SH[CUR.sh],f=CUR.sz/32;cur.style.transform='translate('+(cx-s.x*f)+'px,'+(cy-s.y*f)+'px)'}
+
+  /* ===== состояние: в приложении хранится на стороне Android ===== */
+  var INFO={};
+  if(AND){try{INFO=JSON.parse(Android.getInfo())||{}}catch(e){}
+    if(INFO.sens)SENS=INFO.sens;if(INFO.ws)WS=INFO.ws;
+    try{var S0=Android.getState();if(S0){var o0=JSON.parse(S0);
+      if(o0.ST)ST=o0.ST;if(o0.neon!=null)NEON=o0.neon>=0?COL[o0.neon]||null:null;
+      if(o0.rot!=null)ROT=o0.rot;if(o0.sk)SK0=o0.sk;if(o0.fit)FIT0=o0.fit;
+      if(o0.cur)for(var k0 in o0.cur)CUR[k0]=o0.cur[k0];
+    }}catch(e){}}
+  var st_t=0;
+  function saveState(){
+    if(!AND)return;clearTimeout(st_t);
+    st_t=setTimeout(function(){try{Android.setState(JSON.stringify({ST:ST,neon:NEON?COL.indexOf(NEON):-1,rot:ROT,sk:SK,fit:FIT,cur:CUR,sens:SENS,ws:WS}))}catch(e){}},250);
+  }
+
+  /* ===== движение: дельты копятся и уходят в Android один раз за кадр ===== */
+  var pdx=0,pdy=0;
   function move(dx,dy){
     rot(dx,dy);
-    if(window.Android){Android.onMove(dx*devicePixelRatio,dy*devicePixelRatio);return}
+    if(AND){pdx+=dx*DPR;pdy+=dy*DPR;return}
     cx=Math.max(0,Math.min(innerWidth-2,cx+dx*SENS));cy=Math.max(0,Math.min(innerHeight-2,cy+dy*SENS));
     place();
     var el=document.elementFromPoint(cx,cy),t=el&&el.closest&&el.closest('.tgt');
     if(t!==hov){if(hov)hov.classList.remove('hover');if(t)t.classList.add('hover');hov=t;}
   }
+  function flush(){if(AND&&(pdx||pdy)){var a=pdx,b=pdy;pdx=pdy=0;Android.onMove(a,b)}}
 
-  /* шар */
+  /* ===== шар ===== */
   var drag=false,lx=0,ly=0,vx=0,vy=0,lt=0;
-  cv.addEventListener('pointerdown',function(e){if(window.Android)Android.onBallDown();drag=true;lx=e.clientX;ly=e.clientY;vx=vy=0;lt=performance.now();cv.classList.add('drag');cv.setPointerCapture(e.pointerId);e.preventDefault();});
+  cv.addEventListener('pointerdown',function(e){if(AND)Android.onBallDown();drag=true;lx=e.clientX;ly=e.clientY;vx=vy=0;lt=performance.now();cv.classList.add('drag');cv.setPointerCapture(e.pointerId);e.preventDefault();});
   cv.addEventListener('pointermove',function(e){if(!drag)return;var dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;move(dx,dy);vx=vx*.5+dx*.5;vy=vy*.5+dy*.5;lt=performance.now();e.preventDefault();});
-  function up(){if(!drag)return;if(window.Android)Android.onBallUp();drag=false;cv.classList.remove('drag');if(performance.now()-lt>80)vx=vy=0;}
+  function up(){if(!drag)return;flush();if(AND)Android.onBallUp();drag=false;cv.classList.remove('drag');if(performance.now()-lt>80)vx=vy=0;}
   cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
   function loop(){
     if(!drag&&Math.abs(vx)+Math.abs(vy)>.05){move(vx,vy);vx*=.95;vy*=.95;}else if(!drag){vx=vy=0;}
-    wheelStep();
-    draw();requestAnimationFrame(loop);
+    wheelStep();flush();
+    if(dirty){dirty=false;draw()}
+    requestAnimationFrame(loop);
   }
 
-  /* колесо прокрутки: рёбра крутятся по цилиндру, вращение бесконечное */
+  /* ===== колесо прокрутки ===== */
   var wh=document.getElementById('wh'),wr=document.getElementById('wrib'),WN=20,WR=35,WCY=232,wa=0,wv=0,wdrag=false,wly=0,wlt=0,wmv=0,ribs=[];
   for(var wi=0;wi<WN;wi++){var rc=document.createElementNS('http://www.w3.org/2000/svg','rect');rc.setAttribute('x',305);rc.setAttribute('width',20);rc.setAttribute('fill','#aab5bf');wr.appendChild(rc);ribs.push(rc)}
   function drawWheel(){
@@ -279,19 +311,19 @@ html.and .dlg{max-height:94vh}
   }
   function wheelMove(px){
     var k=mouse.getBoundingClientRect().width/400||.75;
-    wa=(wa+px/(k*WR))%6.2832;drawWheel();if(window.Android)Android.onWheel(px*devicePixelRatio);else scrollAt(px);
+    wa=(wa+px/(k*WR))%6.2832;drawWheel();if(AND)Android.onWheel(px*DPR);else scrollAt(px);
   }
   function wheelStep(){
-    if(!wdrag&&!window.Android&&Math.abs(wv)>.15){wheelMove(wv);wv*=.955}else if(!wdrag){wv=0}
+    if(!wdrag&&!AND&&Math.abs(wv)>.15){wheelMove(wv);wv*=.955}else if(!wdrag){wv=0}
   }
-  wh.addEventListener('pointerdown',function(e){if(window.Android)Android.onWheelStart();wdrag=true;wly=e.clientY;wv=0;wmv=0;wlt=performance.now();wh.setPointerCapture(e.pointerId);e.preventDefault()});
+  wh.addEventListener('pointerdown',function(e){if(AND)Android.onWheelStart();wdrag=true;wly=e.clientY;wv=0;wmv=0;wlt=performance.now();wh.setPointerCapture(e.pointerId);e.preventDefault()});
   wh.addEventListener('pointermove',function(e){
     if(!wdrag)return;var dy=e.clientY-wly;wly=e.clientY;wmv+=Math.abs(dy);
     if(dy)wheelMove(dy);wv=wv*.5+dy*.5;wlt=performance.now();e.preventDefault();
   });
   function wup(){
-    if(!wdrag)return;wdrag=false;if(window.Android){Android.onWheelEnd();wv=0}
-    if(wmv<6){ /* короткий тап = нажатие колеса (средняя кнопка): сброс целей */
+    if(!wdrag)return;wdrag=false;if(AND){Android.onWheelEnd();wv=0}
+    if(wmv<6){
       [].forEach.call(document.querySelectorAll('.tgt'),function(t){t.classList.remove('on','alt')});
       wh.classList.add('tap');setTimeout(function(){wh.classList.remove('tap')},120);wv=0;
     }else if(performance.now()-wlt>80)wv=0;
@@ -300,69 +332,122 @@ html.and .dlg{max-height:94vh}
   wh.addEventListener('wheel',function(e){if(!e.isTrusted)return;e.preventDefault();wv=0;wheelMove(e.deltaY*(e.deltaMode==1?16:1))},{passive:false});
   drawWheel();
 
-  /* кнопки */
+  /* ===== кнопки корпуса ===== */
   function click(right){
-    if(window.Android)return;
+    if(AND)return;
     var r=document.createElement('div');r.className='rip'+(right?' r':'');r.style.left=cx+'px';r.style.top=cy+'px';document.body.appendChild(r);
     r.addEventListener('animationend',function(){r.remove()});
     var el=document.elementFromPoint(cx,cy),t=el&&el.closest&&el.closest('.tgt');
     if(t)t.classList.toggle(right?'alt':'on');
   }
   function apply(){
-    mouse.dataset.s=dlg.dataset.s=ST;
+    mouse.dataset.s=dlg.dataset.s=menu.dataset.s=ST;
     root.style.setProperty('--acc',NEON?NEON.hex:'#c9d3dc');
     document.getElementById('kcdot').style.fill=NEON?NEON.hex:'#8a96a2';
+    dirty=true;saveState();
   }
   function bind(id,fn){var b=document.getElementById(id);
     b.addEventListener('pointerdown',function(e){b.classList.add('pressed');fn();e.preventDefault()});
     ['pointerup','pointerleave','pointercancel'].forEach(function(n){b.addEventListener(n,function(){b.classList.remove('pressed')})})}
-  bind('kl',function(){click(0)});
-  if(window.Android){
-    var KL=document.getElementById('kl'),KR=document.getElementById('kr');
-    KL.addEventListener('pointerdown',function(){Android.onLeft(1)});
-    ['pointerup','pointercancel'].forEach(function(n){KL.addEventListener(n,function(){Android.onLeft(0)})});
-    KR.addEventListener('pointerdown',function(){Android.onRight()});
+
+  /* ===== панели: меню (двойной тап по ЛКМ) и настройки ===== */
+  var menu=document.createElement('div');menu.className='dlg';menu.id='menu';menu.hidden=true;
+  menu.innerHTML='<div class="hd"><span>Меню трекбола</span><button id="mx">✕</button></div><div id="mb"></div>';
+  document.body.appendChild(menu);
+  var mb=menu.querySelector('#mb'),MBT={};
+  function openPanel(w){
+    dlg.hidden=(w!='set');menu.hidden=(w!='menu');
+    if(!root.classList.contains('pm')){root.classList.add('pm');if(AND)Android.onPanel(1)}
+    if(w=='menu')refreshFlags();
   }
+  function closePanel(){
+    dlg.hidden=true;menu.hidden=true;
+    if(root.classList.contains('pm')){root.classList.remove('pm');if(AND)Android.onPanel(0)}
+  }
+  function refreshFlags(){if(!AND)return;try{var o=JSON.parse(Android.getInfo());setFlags(o.locked,o.sel)}catch(e){}}
+  window.setFlags=function(lock,sel){
+    if(MBT.lock){MBT.lock.textContent=lock?'🔒 Закреплён':'🔓 Свободный';MBT.lock.classList.toggle('sel',!!lock)}
+    if(MBT.sel)MBT.sel.classList.toggle('sel',!!sel);
+  };
+  function mact(n){
+    if(n=='set'){openPanel('set');return}
+    if(n=='lock'||n=='sel'){if(AND)Android.onMenu(n);return}
+    closePanel();if(AND)Android.onMenu(n);
+  }
+  function msec(t){var d=document.createElement('div');d.className='r';d.innerHTML='<span>'+t+'</span>';mb.appendChild(d);var g=document.createElement('div');g.className='mgrid';mb.appendChild(g);return g}
+  function mbtn(g,id,label,wide){var b=document.createElement('button');b.textContent=label;if(wide)b.className='wide';b.onclick=function(){mact(id)};g.appendChild(b);MBT[id]=b}
+  var g1=msec('Режим');mbtn(g1,'touchpad','🖱 Обычный тачпад',1);
+  var g2=msec('Окно');
+  mbtn(g2,'set','⚙ Настройки трекбола',1);mbtn(g2,'appset','⚙ Настройки приложения',1);
+  mbtn(g2,'lock','🔓 Свободный');mbtn(g2,'sel','Ab Выделение');
+  mbtn(g2,'files','📁 Файлы');mbtn(g2,'kb','⌨ Клавиатура');
+  mbtn(g2,'close','✕ Скрыть трекбол',1);
+  var g3=msec('Правка');
+  [['undo','Отменить'],['redo','Повторить'],['cut','Вырезать'],['copy','Копировать'],['paste','Вставить'],['delete','Удалить'],['all','Выделить всё']].forEach(function(a){mbtn(g3,a[0],a[1])});
+  menu.querySelector('#mx').onclick=closePanel;
+
+  var lastKl=0,klDbl=false;
+  function openSet(){if(AND){if(dlg.hidden||!root.classList.contains('pm'))openPanel('set');else closePanel()}else dlg.hidden=!dlg.hidden}
+  if(AND){
+    var KL=document.getElementById('kl'),KR=document.getElementById('kr'),SV=document.querySelector('.mouse svg');
+    KL.addEventListener('pointerdown',function(){
+      var n=performance.now();
+      if(n-lastKl<380){klDbl=true;lastKl=0;openPanel('menu');return}   /* второй тап: открыть меню вместо клика */
+      klDbl=false;lastKl=n;Android.onLeft(1);
+    });
+    ['pointerup','pointercancel'].forEach(function(n){KL.addEventListener(n,function(){if(klDbl){klDbl=false;return}Android.onLeft(0)})});
+    KR.addEventListener('pointerdown',function(){Android.onRight()});
+    /* корпус трекбола (всё, что не кнопки и не колесо) таскает окно целиком */
+    SV.addEventListener('pointerdown',function(e){if(e.target.closest&&!e.target.closest('.key,#wh'))Android.dragZone(1)});
+  }
+  bind('kl',function(){click(0)});
   bind('kr',function(){click(1)});
   bind('ks',function(){ST=STY[(STY.indexOf(ST)+1)%STY.length];apply()});
   bind('kc',function(){var n=(NEON?COL.indexOf(NEON):-1)+1;NEON=n>=COL.length?null:COL[n];apply()});
-  bind('kg',function(){dlg.hidden=!dlg.hidden});
-  document.getElementById('dx').onclick=function(){dlg.hidden=true};
+  bind('kg',openSet);
+  document.getElementById('dx').onclick=function(){if(AND)closePanel();else dlg.hidden=true};
 
-  var SKINS={plain:null,gr:'tb_skin_gr.jpg',hx:'tb_skin_hx.jpg',sk:'tb_skin_sk.jpg',gh:'tb_skin_gh.jpg',mb:'tb_skin_mb.jpg',b1:'tb_skin_b1.jpg',b2:'tb_skin_b2.jpg',rb:'tb_skin_rb.jpg'},SK='b1',FIT='none';
+  /* ===== скины ===== */
+  var SKINS={plain:null,gr:'tb_skin_gr.jpg',hx:'tb_skin_hx.jpg',sk:'tb_skin_sk.jpg',gh:'tb_skin_gh.jpg',mb:'tb_skin_mb.jpg',b1:'tb_skin_b1.jpg',b2:'tb_skin_b2.jpg',rb:'tb_skin_rb.jpg'},SK=(typeof SK0!='undefined'&&SK0)||'b1',FIT=(typeof FIT0!='undefined'&&FIT0)||'none';
   function applySkin(){var g=document.getElementById('skg'),im=document.getElementById('skin');
     if(!SKINS[SK]){g.style.display='none';return}
     g.style.display='';im.setAttribute('href',SKINS[SK]);im.setAttribute('preserveAspectRatio',FIT);}
-  /* окно настроек */
+
+  /* ===== окно настроек ===== */
   function slider(lab,min,max,step,val,fn,fmt){
     var w=document.createElement('label');
     w.innerHTML='<div class="r"><span>'+lab+'</span><b>'+fmt(val)+'</b></div><input type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'">';
     var inp=w.querySelector('input'),b=w.querySelector('b');
-    inp.oninput=function(){b.textContent=fmt(+inp.value);fn(+inp.value)};db.appendChild(w);
+    inp.oninput=function(){b.textContent=fmt(+inp.value);fn(+inp.value);saveState()};db.appendChild(w);
   }
   var MARKS=[];
   function group(lab,items,get,set){
     var w=document.createElement('div'),row=document.createElement('div');
     w.innerHTML='<div class="r"><span>'+lab+'</span></div>';row.className='seg';
     function mark(){[].forEach.call(row.children,function(b){b.classList.toggle('sel',b.dataset.v==get())})}
-    items.forEach(function(it){var b=document.createElement('button');b.textContent=it[1];b.dataset.v=it[0];b.onclick=function(){set(it[0]);MARKS.forEach(function(m){m()})};row.appendChild(b)});
+    items.forEach(function(it){var b=document.createElement('button');b.textContent=it[1];b.dataset.v=it[0];b.onclick=function(){set(it[0]);MARKS.forEach(function(m){m()});saveState()};row.appendChild(b)});
     w.appendChild(row);db.appendChild(w);MARKS.push(mark);mark();
   }
-  if(!window.Android)slider('Чувствительность',.5,6,.1,SENS,function(v){SENS=v},function(v){return Math.round(v*400)+' PPI'});
-  if(!window.Android)slider('Размер трекбола',.6,1.3,.05,1,function(v){mouse.style.width='min(92vw,'+(310*v)+'px)'},function(v){return Math.round(v*100)+'%'});
-  slider('Поворот трекбола',-180,180,5,0,function(v){mouse.style.transform='rotate('+v+'deg)'},function(v){return v+'°'});
-  if(!window.Android)slider('Размер курсора',16,56,2,CUR.sz,function(v){CUR.sz=v;drawCur()},function(v){return v+' px'});
+  function setRot(v){ROT=v;mouse.style.transform=v?'rotate('+v+'deg)':''}
+  function setWidth(v){WS=v;if(!AND)mouse.style.width='min(92vw,'+(310*v)+'px)'}
+  slider('Чувствительность',.5,6,.1,SENS,function(v){SENS=v},function(v){return Math.round(v*400)+' PPI'});
+  slider('Размер трекбола',.6,1.5,.05,WS,setWidth,function(v){return Math.round(v*100)+'%'});
+  slider('Поворот трекбола',-180,180,5,ROT,setRot,function(v){return v+'°'});
+  slider('Размер курсора',16,64,2,CUR.sz,function(v){CUR.sz=v;drawCur()},function(v){return v+' px'});
   var PRE=[['classic','Классика',{sh:'arrow',st:'fill',col:'#ffffff',glow:0}],['pix','Пиксельная рука',{sh:'hand',st:'dark',col:'#2bff2b',glow:0}],['neon','Неон красный',{sh:'sharp',st:'dark',col:'#ff1a1a',glow:1}],['cy','Неон циан',{sh:'sharp',st:'line',col:'#35e0ff',glow:1}]];
-  if(!window.Android)group('Готовые курсоры',PRE.map(function(q){return [q[0],q[1]]}),function(){return ''},function(v){var q=PRE.filter(function(z){return z[0]==v})[0][2];for(var k in q)CUR[k]=q[k];drawCur()});
-  if(!window.Android)group('Форма курсора',[['arrow','Стрелка'],['sharp','Острая'],['hand','Рука'],['dot','Точка'],['ring','Кольцо'],['cross','Прицел'],['ibeam','Текст'],['dia','Ромб'],['tri','Треугольник']],function(){return CUR.sh},function(v){CUR.sh=v;drawCur()});
-  if(!window.Android)group('Стиль курсора',[['fill','Заливка'],['dark','Тёмный'],['line','Контур']],function(){return CUR.st},function(v){CUR.st=v;drawCur()});
-  if(!window.Android)group('Цвет курсора',[['#ffffff','Белый'],['#2bff2b','Зелёный'],['#ff1a1a','Красный'],['#35e0ff','Циан'],['#ffe83a','Жёлтый'],['#ff3df0','Розовый']],function(){return CUR.col},function(v){CUR.col=v;drawCur()});
-  if(!window.Android)group('Свечение курсора',[['0','Выкл'],['1','Вкл']],function(){return String(CUR.glow)},function(v){CUR.glow=+v;drawCur()});
-
+  group('Готовые курсоры',PRE.map(function(q){return [q[0],q[1]]}),function(){return ''},function(v){var q=PRE.filter(function(z){return z[0]==v})[0][2];for(var k in q)CUR[k]=q[k];drawCur()});
+  group('Форма курсора',[['arrow','Стрелка'],['sharp','Острая'],['hand','Рука'],['dot','Точка'],['ring','Кольцо'],['cross','Прицел'],['ibeam','Текст'],['dia','Ромб'],['tri','Треугольник']],function(){return CUR.sh},function(v){CUR.sh=v;drawCur()});
+  group('Стиль курсора',[['fill','Заливка'],['dark','Тёмный'],['line','Контур']],function(){return CUR.st},function(v){CUR.st=v;drawCur()});
+  group('Цвет курсора',[['#ffffff','Белый'],['#2bff2b','Зелёный'],['#ff1a1a','Красный'],['#35e0ff','Циан'],['#ffe83a','Жёлтый'],['#ff3df0','Розовый']],function(){return CUR.col},function(v){CUR.col=v;drawCur()});
+  group('Свечение курсора',[['0','Выкл'],['1','Вкл']],function(){return String(CUR.glow)},function(v){CUR.glow=+v;drawCur()});
+  group('Стиль трекбола',[['classic','Классика'],['glass','Стекло'],['holo','Голограмма'],['bubble','Пузырь']],function(){return ST},function(v){ST=v;apply()});
+  group('Подсветка трекбола',COL.map(function(c,i){return [String(i),c.hex==COL[0].hex?'Циан':['','Розовый','Лайм','Жёлтый','Оранжевый','Фиолет'][i]]}).concat([['-1','Выкл']]),function(){return String(NEON?COL.indexOf(NEON):-1)},function(v){NEON=+v>=0?COL[+v]:null;apply()});
   group('Раскраска трекбола',[['plain','Обычный'],['b1','Пляж сзади'],['b2','Пляж спереди'],['rb','Робот'],['hx','Неоновые соты'],['sk','Череп'],['gh','Серые соты'],['mb','Мрамор'],['gr','Зелёные соты']],function(){return SK},function(v){SK=v;applySkin()});
   group('Картинка на корпусе',[['none','Растянуть'],['xMidYMid slice','Обрезать']],function(){return FIT},function(v){FIT=v;applySkin()});
-  addEventListener('resize',function(){cx=Math.min(cx,innerWidth-2);cy=Math.min(cy,innerHeight-2);place()});
-  rot(40,-25);apply();applySkin();drawCur();loop();
+  addEventListener('resize',function(){cx=Math.min(cx,innerWidth-2);cy=Math.min(cy,innerHeight-2);place();dirty=true});
+  rot(40,-25);setRot(ROT);apply();applySkin();drawCur();
+  if(AND)saveState();   /* первый раз передаём курсор и настройки в приложение */
+  loop();
 })();
 </script>
 </body>

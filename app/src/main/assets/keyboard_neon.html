@@ -7,6 +7,8 @@
 <style>
 :root{--bg:#02030a}
 html.and,html.and body{background:transparent!important}
+html.and #kb{height:100vh;display:flex;flex-direction:column}
+html.and .board{flex:1 1 auto;justify-content:space-between;min-height:0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
 html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",Roboto,system-ui,sans-serif}
 body{display:flex;flex-direction:column;justify-content:flex-end}
@@ -182,7 +184,10 @@ function applySkin(){
 /* ================= Отрисовка ================= */
 function sizes(){
   const W=(board.clientWidth||innerWidth-32)-16, g=W<520?4:7;
-  const u=(W-g*13)/14.5, d=Math.max(24,Math.min(56,Math.round(u*1.45)));
+  const u=(W-g*13)/14.5, dw=Math.round(u*1.45);
+  /* высоту окна задаёт приложение: подгоняем клавиши, чтобы все 6 рядов поместились */
+  const chrome=8+14+32+8+16+2, R=6, dh=Math.floor((innerHeight-chrome-g*(R-1))/R);
+  const d=Math.max(22,Math.min(56,dw,dh));
   board.style.setProperty("--d",d+"px");board.style.setProperty("--g",g+"px");
 }
 function mkKey(k,kind){
@@ -203,7 +208,7 @@ function mkKey(k,kind){
   return el;
 }
 function mkRow(r,kind){const rd=document.createElement("div");rd.className="row";r.k.forEach(k=>rd.appendChild(mkKey(k,kind)));return rd}
-function reportH(){if(window.Android&&Android.onSize){var h=document.getElementById("kb").offsetHeight;Android.onSize(h)}}
+function reportH(){}
 function render(){
   const L=S.layer=="letters"?LAYERS.letters(S.lang):LAYERS[S.layer]();
   sizes();board.innerHTML="";

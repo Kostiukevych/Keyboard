@@ -154,7 +154,9 @@ class VirtualMouseIME : InputMethodService() {
         w.settings.domStorageEnabled = true
         w.isLongClickable = false
         w.setOnLongClickListener { true }
+        w.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         w.addJavascriptInterface(NeonBridge(), "Android")
+        applyNeonHeight()
         w.webViewClient = object : android.webkit.WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 view?.evaluateJavascript("setLang(${settings.language.coerceIn(0, 2)})", null)
@@ -164,14 +166,27 @@ class VirtualMouseIME : InputMethodService() {
         return v
     }
 
-    private fun neonResize(hCss: Int) {
+    /** Высота Neon-клавиатуры задаётся здесь (а не страницей), чтобы окно клавиатуры не обрезалось. */
+    private fun neonHeightPx(): Int {
+        val dm = resources.displayMetrics
+        val wDp = dm.widthPixels / dm.density
+        val hDp = dm.heightPixels / dm.density
+        val target = (wDp * 0.62f).coerceIn(280f, 430f).coerceAtMost(hDp * 0.6f)
+        return (target * dm.density).toInt()
+    }
+
+    private fun applyNeonHeight() {
         val w = web ?: return
-        val h = (hCss * density).toInt().coerceAtLeast(dp(120))
-        val lp = w.layoutParams
-        if (lp != null && lp.height != h) {
+        val lp = w.layoutParams ?: return
+        val h = neonHeightPx()
+        if (lp.height != h) {
             lp.height = h
             w.layoutParams = lp
         }
+    }
+
+    private fun neonResize(hCss: Int) {
+        // Размер больше не подстраивается под страницу
     }
 
     private fun neonKey(json: String) {
@@ -271,6 +286,7 @@ class VirtualMouseIME : InputMethodService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        applyNeonHeight()
         if (rowsBox != null) refreshAll()
     }
 

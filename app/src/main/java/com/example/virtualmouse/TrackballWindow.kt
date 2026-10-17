@@ -19,19 +19,27 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONObject
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Во сколько раз страница едет быстрее пальца на колёсике трекбола. */
 private const val BALL_WHEEL_GAIN = 2.2f
 
+/** Базовая ширина окна трекбола при масштабе 100 % (dp) и соотношение сторон корпуса. */
+private const val BALL_BASE_DP = 260
+private const val BALL_ASPECT = 1.15f
+
 /**
- * Трекбол Orbit X (HTML-интерфейс в WebView) — те же функции, что и у тачпада:
- * движение курсора шаром, ЛКМ (удержание = перетаскивание), ПКМ (двойной = меню),
- * колёсико, режим выделения текста, файловый менеджер, буфер, клавиатура, настройки.
+ * Трекбол Orbit X: прозрачное окно, в котором виден только сам трекбол (без рамки тачпада).
+ *  - шар — движение курсора, ЛКМ (удержание 0.8 с = перетаскивание), ПКМ (дважды = меню правки),
+ *  - колёсико — скролл,
+ *  - двойное нажатие на ЛКМ — меню: тачпад, настройки, замок, выделение, файлы, клавиатура, правка,
+ *  - корпус трекбола можно таскать пальцем (если не закреплён замком).
+ * Все настройки (курсоры, скин, поворот, чувствительность) — в HTML-панели trackball.html.
  */
 @SuppressLint("SetJavaScriptEnabled")
 class TrackballWindow(
@@ -42,7 +50,8 @@ class TrackballWindow(
     private val save: () -> Unit,
     private val onSettings: () -> Unit,
     private val onKeyboard: () -> Unit,
-    private val onHide: () -> Unit
+    private val onHide: () -> Unit,
+    private val onSwitchToTouchpad: () -> Unit
 ) : PadWindow {
 
     private val density = ctx.resources.displayMetrics.density
@@ -61,8 +70,6 @@ class TrackballWindow(
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    private var lockBtn: TextView? = null
-    private var selBtn: TextView? = null
     private var ctxMenu: View? = null
 
     private var held = false
@@ -79,6 +86,17 @@ class TrackballWindow(
     private var rClickCount = 0
     private var rClickTimer: Runnable? = null
     private var tickAcc = 0f
+
+    // Режим «панель»: окно временно увеличивается под меню/настройки
+    private var panelOpen = false
+
+    // Перетаскивание окна за корпус трекбола
+    private var dragZone = false
+    private var winDrag = false
+    private var dsx = 0f
+    private var dsy = 0f
+    private var dox = 0
+    private var doy = 0
 
     override val isShown: Boolean get() = root != null
 
@@ -101,17 +119,30 @@ class TrackballWindow(
             null
         }
 
-    private fun fit() {
+    /** Обычный прямоугольник окна: x, y, ширина, высота. */
+    private fun normalRect(): IntArray {
         val s = getSettings()
         val (sw, sh) = screen()
-        val w = dp(s.ballWidthDp).coerceIn(min(dp(220), sw), sw)
-        val h = dp(s.ballHeightDp).coerceIn(min(dp(260), sh), sh)
-        lp.width = w
-        lp.height = h
+        val w = dp(s.ballWidthDp).coerceIn(min(dp(150), sw), sw)
+        val h = dp(s.ballHeightDp).coerceIn(min(dp(170), sh), sh)
         val px = if (s.padX < 0) (sw - w) / 2 else s.padX
         val py = if (s.padY < 0) sh - h - dp(24) else s.padY
-        lp.x = px.coerceIn(0, sw - w)
-        lp.y = py.coerceIn(0, sh - h)
+        return intArrayOf(px.coerceIn(0, sw - w), py.coerceIn(0, sh - h), w, h)
+    }
+
+    private fun fit() {
+        val n = normalRect()
+        if (!panelOpen) {
+            lp.x = n[0]; lp.y = n[1]; lp.width = n[2]; lp.height = n[3]
+            return
+        }
+        val (sw, sh) = screen()
+        val w = min(sw, dp(360))
+        val h = min((sh * 0.92f).toInt(), dp(620))
+        lp.width = w
+        lp.height = h
+        lp.x = (n[0] + n[2] / 2 - w / 2).coerceIn(0, sw - w)
+        lp.y = (n[1] + n[3] / 2 - h / 2).coerceIn(0, sh - h)
     }
 
     private fun refresh() {
@@ -126,12 +157,12 @@ class TrackballWindow(
         if (root != null) return
         val v = LayoutInflater.from(ContextThemeWrapper(ctx, R.style.Theme_VirtualMouse))
             .inflate(R.layout.overlay_trackball, null)
+        panelOpen = false
         fit()
         bind(v)
         try {
             wm.addView(v, lp)
             root = v
-            applyColors()
         } catch (_: Exception) {
             Toast.makeText(ctx, "Нет разрешения «Поверх других окон»", Toast.LENGTH_SHORT).show()
         }
@@ -144,6 +175,7 @@ class TrackballWindow(
         if (selDrag) { MouseAccessibilityService.instance?.dragEnd(); selDrag = false }
         MouseAccessibilityService.instance?.scrollEnd()
         selectMode = false
+        panelOpen = false
         closeContextMenu()
         root?.let {
             try {
@@ -165,13 +197,7 @@ class TrackballWindow(
     override fun applySettings() {
         if (root == null) return
         fit()
-        lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
-        applyColors()
         refresh()
-    }
-
-    private fun applyColors() {
-        root?.findViewById<TextView>(R.id.pad_title)?.setTextColor(getSettings().padColor)
     }
 
     override fun destroy() {
@@ -204,6 +230,25 @@ class TrackballWindow(
         @JavascriptInterface fun onWheelStart() { handler.post { wheelStart() } }
         @JavascriptInterface fun onWheel(dy: Double) { handler.post { wheelMove(dy.toFloat()) } }
         @JavascriptInterface fun onWheelEnd() { handler.post { wheelEnd() } }
+        @JavascriptInterface fun dragZone(on: Int) { handler.post { dragZone = on == 1 } }
+        @JavascriptInterface fun onPanel(open: Int) { handler.post { setPanel(open == 1) } }
+        @JavascriptInterface fun onMenu(name: String) { handler.post { menuAction(name) } }
+
+        /** Сохранённое состояние страницы (скин, поворот, курсор…) — JSON или пустая строка. */
+        @JavascriptInterface fun getState(): String = getSettings().tbState
+
+        /** Текущие значения, которыми управляет само приложение. */
+        @JavascriptInterface fun getInfo(): String {
+            val s = getSettings()
+            val o = JSONObject()
+            o.put("sens", s.sensitivity.toDouble())
+            o.put("ws", s.ballWidthDp.toDouble() / BALL_BASE_DP)
+            o.put("locked", s.padLocked)
+            o.put("sel", selectMode)
+            return o.toString()
+        }
+
+        @JavascriptInterface fun setState(json: String) { handler.post { applyState(json) } }
     }
 
     private fun move(dx: Float, dy: Float) {
@@ -229,8 +274,86 @@ class TrackballWindow(
             MouseAccessibilityService.instance?.dragEnd()
             selDrag = false
             selectMode = false
-            selBtn?.isSelected = false
             sounds.beep(180)
+            pushFlags()
+        }
+    }
+
+    // ---------- Состояние HTML-панели ----------
+
+    private fun applyState(json: String) {
+        val s = getSettings()
+        s.tbState = json
+        try {
+            val o = JSONObject(json)
+            val cur = o.optJSONObject("cur")
+            if (cur != null) {
+                s.cursorShape = cur.optString("sh", "arrow")
+                s.cursorFill = cur.optString("st", "fill")
+                s.cursorGlow = cur.optInt("glow", 0) == 1
+                s.cursorSizeDp = cur.optInt("sz", 40).coerceIn(12, 80)
+                try {
+                    s.cursorColor = Color.parseColor(cur.optString("col", "#35e0ff"))
+                } catch (_: Exception) {
+                }
+            }
+            if (o.has("sens")) s.sensitivity = o.optDouble("sens", 2.1).toFloat().coerceIn(0.3f, 8f)
+            if (o.has("ws")) {
+                val ws = o.optDouble("ws", 1.0).coerceIn(0.5, 1.6)
+                s.ballWidthDp = (BALL_BASE_DP * ws).roundToInt()
+                s.ballHeightDp = (s.ballWidthDp * BALL_ASPECT).roundToInt()
+            }
+        } catch (_: Exception) {
+        }
+        cursor.applySettings(s)
+        fit()
+        refresh()
+        save()
+    }
+
+    private fun pushFlags() {
+        val s = getSettings()
+        web?.evaluateJavascript("window.setFlags&&setFlags(${s.padLocked},$selectMode)", null)
+    }
+
+    /** Окно временно увеличивается, пока открыто меню или настройки. */
+    private fun setPanel(open: Boolean) {
+        if (panelOpen == open) return
+        panelOpen = open
+        closeContextMenu()
+        fit()
+        refresh()
+    }
+
+    private fun menuAction(name: String) {
+        sounds.beep(260)
+        when (name) {
+            "touchpad" -> {
+                sounds.beep(420)
+                onSwitchToTouchpad()
+            }
+            "lock" -> {
+                val s = getSettings()
+                s.padLocked = !s.padLocked
+                save()
+                pushFlags()
+            }
+            "sel" -> {
+                selectMode = !selectMode
+                if (selectMode) Toast.makeText(ctx, "Выделение: зажмите шар и крутите его", Toast.LENGTH_SHORT).show()
+                pushFlags()
+            }
+            "files" -> FileManagerLauncher.open(ctx)
+            "kb" -> onKeyboard()
+            "appset" -> onSettings()
+            "close" -> onHide()
+            "undo" -> svc()?.undo()
+            "redo" -> svc()?.redo()
+            "cut" -> svc()?.cutSelection()
+            "copy" -> svc()?.copySelection()
+            "paste" -> svc()?.pasteFromBuffer()
+            "delete" -> svc()?.deleteSelection()
+            "all" -> svc()?.selectAllText()
         }
     }
 
@@ -319,7 +442,7 @@ class TrackballWindow(
         MouseAccessibilityService.instance?.scrollEnd()
     }
 
-    // ---------- Контекстное меню ----------
+    // ---------- Контекстное меню правки (двойной ПКМ) ----------
 
     private fun openContextMenu() {
         ctxMenu?.visibility = View.VISIBLE
@@ -349,43 +472,7 @@ class TrackballWindow(
     // ---------- Привязка окна ----------
 
     private fun bind(v: View) {
-        lockBtn = v.findViewById(R.id.pad_btn_lock)
-        selBtn = v.findViewById(R.id.pad_btn_sel)
         ctxMenu = v.findViewById(R.id.pad_ctx_menu)
-
-        lockBtn?.text = if (getSettings().padLocked) "🔒" else "🔓"
-        lockBtn?.setOnClickListener {
-            val s = getSettings()
-            s.padLocked = !s.padLocked
-            lockBtn?.text = if (s.padLocked) "🔒" else "🔓"
-            sounds.beep(340)
-            save()
-        }
-        selBtn?.isSelected = selectMode
-        selBtn?.setOnClickListener {
-            selectMode = !selectMode
-            selBtn?.isSelected = selectMode
-            sounds.beep(if (selectMode) 420 else 240)
-            if (selectMode) Toast.makeText(ctx, "Выделение: крутите шар (удержание 0.6 с, затем движение)", Toast.LENGTH_SHORT).show()
-        }
-        v.findViewById<View>(R.id.pad_btn_files)?.setOnClickListener {
-            sounds.beep(340)
-            FileManagerLauncher.open(ctx)
-        }
-        v.findViewById<View>(R.id.pad_btn_kb).setOnClickListener {
-            sounds.beep(340)
-            onKeyboard()
-        }
-        v.findViewById<View>(R.id.pad_btn_settings).setOnClickListener {
-            sounds.beep(340)
-            onSettings()
-        }
-        v.findViewById<View>(R.id.pad_btn_close).setOnClickListener {
-            sounds.beep(180)
-            onHide()
-        }
-        bindTitle(v.findViewById(R.id.pad_title))
-        bindResize(v.findViewById(R.id.pad_resize))
         bindContextMenu(v)
         bindWeb(v.findViewById(R.id.ball_web))
     }
@@ -400,68 +487,39 @@ class TrackballWindow(
         w.overScrollMode = View.OVER_SCROLL_NEVER
         w.settings.javaScriptEnabled = true
         w.settings.domStorageEnabled = true
+        w.settings.setSupportZoom(false)
         w.addJavascriptInterface(Bridge(), "Android")
         w.setOnLongClickListener { true }
         w.isLongClickable = false
+        w.setOnTouchListener { _, e ->
+            // Корпус трекбола (JS ставит dragZone) таскает всё окно; ничего не перехватываем у страницы
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    dragZone = false
+                    winDrag = false
+                    dsx = e.rawX; dsy = e.rawY; dox = lp.x; doy = lp.y
+                }
+                MotionEvent.ACTION_MOVE -> if (dragZone && !panelOpen && !getSettings().padLocked) {
+                    if (!winDrag && hypot(e.rawX - dsx, e.rawY - dsy) > dp(6)) winDrag = true
+                    if (winDrag) {
+                        val (sw, sh) = screen()
+                        lp.x = (dox + (e.rawX - dsx)).toInt().coerceIn(0, (sw - lp.width).coerceAtLeast(0))
+                        lp.y = (doy + (e.rawY - dsy)).toInt().coerceIn(0, (sh - lp.height).coerceAtLeast(0))
+                        refresh()
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (winDrag) {
+                        val s = getSettings()
+                        s.padX = lp.x; s.padY = lp.y
+                        save()
+                    }
+                    winDrag = false
+                    dragZone = false
+                }
+            }
+            false
+        }
         w.loadUrl("file:///android_asset/trackball.html")
-    }
-
-    private fun bindTitle(t: View) {
-        var sx = 0f
-        var sy = 0f
-        var ox = 0
-        var oy = 0
-        t.setOnTouchListener { _, e ->
-            if (getSettings().padLocked) return@setOnTouchListener true
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    sx = e.rawX; sy = e.rawY; ox = lp.x; oy = lp.y
-                    closeContextMenu()
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val (sw, sh) = screen()
-                    lp.x = (ox + (e.rawX - sx)).toInt().coerceIn(0, (sw - lp.width).coerceAtLeast(0))
-                    lp.y = (oy + (e.rawY - sy)).toInt().coerceIn(0, (sh - lp.height).coerceAtLeast(0))
-                    refresh()
-                }
-                MotionEvent.ACTION_UP -> {
-                    val s = getSettings()
-                    s.padX = lp.x; s.padY = lp.y
-                    save()
-                }
-            }
-            true
-        }
-    }
-
-    private fun bindResize(r: View) {
-        var sx = 0f
-        var sy = 0f
-        var w0 = 0
-        var h0 = 0
-        r.setOnTouchListener { _, e ->
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    sx = e.rawX; sy = e.rawY; w0 = lp.width; h0 = lp.height
-                    closeContextMenu()
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val (sw, sh) = screen()
-                    lp.width = (w0 + (e.rawX - sx)).toInt().coerceIn(min(dp(220), sw), sw)
-                    lp.height = (h0 + (e.rawY - sy)).toInt().coerceIn(min(dp(260), sh), sh)
-                    lp.x = lp.x.coerceIn(0, sw - lp.width)
-                    lp.y = lp.y.coerceIn(0, sh - lp.height)
-                    refresh()
-                }
-                MotionEvent.ACTION_UP -> {
-                    val s = getSettings()
-                    s.ballWidthDp = (lp.width / density).roundToInt()
-                    s.ballHeightDp = (lp.height / density).roundToInt()
-                    s.padX = lp.x; s.padY = lp.y
-                    save()
-                }
-            }
-            true
-        }
     }
 }

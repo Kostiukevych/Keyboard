@@ -2,19 +2,43 @@ package com.example.virtualmouse
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.os.Build
 import android.util.DisplayMetrics
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.PathParser
+
+/** Формы курсора из HTML Orbit X (viewBox 32x32). x,y — «горячая точка». */
+internal class CursorShape(val d: String, val x: Float, val y: Float, val line: Boolean, val miter: Boolean)
+
+internal val CURSOR_SHAPES: Map<String, CursorShape> = mapOf(
+    "arrow" to CursorShape("M3 2L3 23L8.5 18L12.5 27L16 25.5L12 16.8L19.5 16.8Z", 3f, 2f, false, false),
+    "sharp" to CursorShape("M10 7.7L23.4 20.8H15.7L10 26.1Z", 10f, 7.7f, false, false),
+    "hand" to CursorShape("M11 1L15 1L15 11L19 11L19 13L23 13L23 15L27 15L27 25L25 25L25 31L13 31L13 29L9 25L5 21L5 19L3 19L3 17L7 17L9 19L9 21L11 21Z", 12f, 1f, false, true),
+    "dot" to CursorShape("M9 16a7 7 0 1 0 14 0a7 7 0 1 0 -14 0Z", 16f, 16f, false, false),
+    "ring" to CursorShape("M7 16a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z", 16f, 16f, true, false),
+    "cross" to CursorShape("M16 3V12M16 20V29M3 16H12M20 16H29", 16f, 16f, true, false),
+    "ibeam" to CursorShape("M11 4H21M16 4V28M11 28H21", 16f, 16f, true, false),
+    "dia" to CursorShape("M16 4L28 16L16 28L4 16Z", 16f, 16f, false, false),
+    "tri" to CursorShape("M16 4L28 27H4Z", 16f, 16f, false, false)
+)
 
 /**
  * Оверлей курсора мыши.
- * Чистая векторная стрелка без цветного ореола и тени,
- * с поддержкой цвета, размера и плавной анимации нажатия (0.88x).
+ * Поддерживает старые стили (стрелка/прицел/точка/рука) и 9 форм из трекбола Orbit X
+ * (заливка / тёмный / контур, цвет, неоновое свечение).
+ * Перемещение объединяется по кадрам (Choreographer): окно двигается не чаще одного раза за кадр,
+ * поэтому курсор не «лагает» при частых событиях касания.
  */
 class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
@@ -30,6 +54,12 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
     private var hotY = 0
     private val density = ctx.resources.displayMetrics.density
 
+    private var framePending = false
+    private val frameCb = Choreographer.FrameCallback {
+        framePending = false
+        pushLayout()
+    }
+
     private val lp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -37,7 +67,8 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
@@ -67,9 +98,67 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         }
     }
 
-    private fun rebuild() {
-        val s = settings
-        val size = (s.cursorSizeDp * density).toInt().coerceAtLeast(8)
+    private fun strokePaint(color: Int, width: Float, miter: Boolean) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = width
+        strokeJoin = if (miter) Paint.Join.MITER else Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+        this.color = color
+    }
+
+    private fun fillPaint(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        this.color = color
+    }
+
+    /** Рисует форму из HTML (SVG-путь 32x32) в битмап с запасом под свечение. */
+    private fun renderShape(shape: CursorShape, size: Int, s: CursorSettings): Bitmap {
+        val pad = (10 * density).toInt()
+        val tot = size + pad * 2
+        val bmp = Bitmap.createBitmap(tot, tot, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val f = size / 32f
+
+        val raw = PathParser.createPathFromPathData(shape.d)
+        val path = Path()
+        val m = Matrix()
+        m.setScale(f, f)
+        m.postTranslate(pad.toFloat(), pad.toFloat())
+        raw.transform(m, path)
+
+        val col = s.cursorColor
+        val lineMode = shape.line || s.cursorFill == "line"
+
+        // Неоновое свечение: два слоя размытия, как drop-shadow(0 0 3px) + drop-shadow(0 0 8px)
+        if (s.cursorGlow) {
+            for (r in floatArrayOf(8f, 3f)) {
+                val g = strokePaint(col, (if (lineMode) 2.6f else 2f) * f, shape.miter).apply {
+                    maskFilter = BlurMaskFilter(r * density, BlurMaskFilter.Blur.NORMAL)
+                }
+                if (!lineMode) canvas.drawPath(path, fillPaint(col).apply { maskFilter = g.maskFilter })
+                canvas.drawPath(path, g)
+            }
+        }
+
+        val outline = Color.parseColor("#06232B")
+        if (lineMode) {
+            canvas.drawPath(path, strokePaint(outline, 5.5f * f, shape.miter))
+            canvas.drawPath(path, strokePaint(col, 2.6f * f, shape.miter))
+        } else if (s.cursorFill == "dark") {
+            canvas.drawPath(path, fillPaint(Color.parseColor("#111111")))
+            canvas.drawPath(path, strokePaint(col, 2.2f * f, shape.miter))
+        } else {
+            canvas.drawPath(path, fillPaint(col))
+            canvas.drawPath(path, strokePaint(outline, 1.6f * f, shape.miter))
+        }
+
+        hotX = (pad + shape.x * f).toInt()
+        hotY = (pad + shape.y * f).toInt()
+        return bmp
+    }
+
+    /** Старые стили курсора (векторные ресурсы). */
+    private fun renderLegacy(size: Int, s: CursorSettings): Bitmap {
         val res = when (s.cursorStyle) {
             1 -> R.drawable.cursor_cross
             2 -> R.drawable.cursor_dot
@@ -82,7 +171,6 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
             it.setTint(s.cursorColor)
             it.draw(Canvas(full))
         }
-
         if (s.cursorStyle == 0) {
             hotX = (size * 0.225f).toInt()
             hotY = (size * 0.194f).toInt()
@@ -90,28 +178,44 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
             hotX = size / 2
             hotY = size / 2
         }
+        return full
+    }
+
+    private fun rebuild() {
+        val s = settings
+        val size = (s.cursorSizeDp * density).toInt().coerceAtLeast(8)
+        val shape = if (s.cursorShape.isNotEmpty()) CURSOR_SHAPES[s.cursorShape] else null
+        val bmp = if (shape != null) renderShape(shape, size, s) else renderLegacy(size, s)
 
         val v = view ?: CursorView(ctx).also { view = it }
         v.icon?.recycle()
-        v.icon = full
-        v.total = size
+        v.icon = bmp
+        v.total = bmp.width
         v.pivotX = hotX.toFloat()
         v.pivotY = hotY.toFloat()
-        lp.width = size
-        lp.height = size
+        lp.width = bmp.width
+        lp.height = bmp.height
         v.requestLayout()
         v.invalidate()
         update()
+        pushLayout()
     }
 
+    /** Запоминает позицию и планирует единственное обновление окна на ближайший кадр. */
     private fun update() {
         lp.x = (x - hotX).toInt()
         lp.y = (y - hotY).toInt()
-        if (shown) {
-            try {
-                wm.updateViewLayout(view, lp)
-            } catch (_: Exception) {
-            }
+        if (shown && !framePending) {
+            framePending = true
+            Choreographer.getInstance().postFrameCallback(frameCb)
+        }
+    }
+
+    private fun pushLayout() {
+        if (!shown) return
+        try {
+            wm.updateViewLayout(view, lp)
+        } catch (_: Exception) {
         }
     }
 
@@ -124,7 +228,8 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
     fun show() {
         if (shown) return
         try {
-            update()
+            lp.x = (x - hotX).toInt()
+            lp.y = (y - hotY).toInt()
             wm.addView(view, lp)
             shown = true
         } catch (_: Exception) {
@@ -133,6 +238,8 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
     fun hide() {
         if (!shown) return
+        Choreographer.getInstance().removeFrameCallback(frameCb)
+        framePending = false
         try {
             wm.removeView(view)
         } catch (_: Exception) {

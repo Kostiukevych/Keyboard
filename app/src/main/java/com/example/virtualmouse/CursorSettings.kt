@@ -25,8 +25,12 @@ data class CursorSettings(
     var language: Int = 1,                               // 0=EN, 1=RU, 2=UK
     var padStyle: Int = 0,                               // 0=тачпад, 1=трекбол Orbit X
     var kbStyle: Int = 0,                                // 0=классическая клавиатура, 1=Neon Keys
-    var ballWidthDp: Int = 300,                          // Размер окна трекбола
-    var ballHeightDp: Int = 380
+    var ballWidthDp: Int = 260,                          // Размер окна трекбола (ширина)
+    var ballHeightDp: Int = 300,                         // Размер окна трекбола (высота)
+    var cursorShape: String = "",                        // Форма курсора из трекбола (пусто = старые стили 0..3)
+    var cursorFill: String = "fill",                     // fill / dark / line
+    var cursorGlow: Boolean = false,                     // Неоновое свечение курсора
+    var tbState: String = ""                             // JSON-состояние страницы трекбола (скин, поворот и т.д.)
 ) {
     /** Ширина/высота окна текущего указателя (у тачпада и трекбола свои размеры). */
     var curW: Int

@@ -125,7 +125,13 @@ class OverlayService : Service() {
                 save = save,
                 onSettings = { toggleSettings() },
                 onKeyboard = { showPicker() },
-                onHide = { hidePad() }
+                onHide = { hidePad() },
+                onSwitchToTouchpad = {
+                    // Двойной тап по ЛКМ трекбола -> меню -> «Тачпад»
+                    settings.padStyle = 0
+                    persist()
+                    applyAll()
+                }
             )
         } else {
             TouchpadWindow(

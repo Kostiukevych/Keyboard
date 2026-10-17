@@ -2,104 +2,15 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/ball_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
 
-    <!-- Внешняя карточка-платформа со стеклянным градиентом -->
-    <LinearLayout
-        android:id="@+id/pad_card"
+    <!-- Только сам трекбол Orbit X (прозрачный WebView), без рамки и панели тачпада.
+         Кнопки управления вызываются двойным нажатием на левую кнопку трекбола. -->
+    <WebView
+        android:id="@+id/ball_web"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/bg_card_platform"
-        android:orientation="vertical"
-        android:paddingStart="8dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="6dp">
-
-        <!-- Верхняя полоса управления (Заголовок для перетаскивания + стеклянные кнопки) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="32dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingBottom="4dp">
-
-            <TextView
-                android:id="@+id/pad_title"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center_vertical"
-                android:paddingStart="6dp"
-                android:text="⠿"
-                android:textColor="@color/acc_soft"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/pad_btn_lock"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="🔓"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/pad_btn_sel"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="Ab"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/pad_btn_files"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="📁"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/pad_btn_kb"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="⌨"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/pad_btn_settings"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="⚙"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/pad_btn_close"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="✕"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <!-- Окно трекбола: WebView с интерфейсом Orbit X -->
-        <FrameLayout
-            android:id="@+id/ball_well"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_touchpad_well">
-
-            <WebView
-                android:id="@+id/ball_web"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </FrameLayout>
-    </LinearLayout>
+        android:layout_height="match_parent" />
 
     <!-- Всплывающее контекстное меню ПКМ (.ctx-menu) -->
     <LinearLayout
@@ -196,16 +107,4 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Уголок изменения размера в нижнем правом углу -->
-    <TextView
-        android:id="@+id/pad_resize"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_gravity="bottom|end"
-        android:gravity="bottom|end"
-        android:paddingEnd="6dp"
-        android:paddingBottom="4dp"
-        android:text="◢"
-        android:textColor="@color/acc_soft"
-        android:textSize="16sp" />
 </FrameLayout>

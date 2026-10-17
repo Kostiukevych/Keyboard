@@ -28,7 +28,11 @@ object PreferenceHelper {
             padStyle = p.getInt("padStyle", D.padStyle),
             kbStyle = p.getInt("kbStyle", D.kbStyle),
             ballWidthDp = p.getInt("ballWidthDp", D.ballWidthDp),
-            ballHeightDp = p.getInt("ballHeightDp", D.ballHeightDp)
+            ballHeightDp = p.getInt("ballHeightDp", D.ballHeightDp),
+            cursorShape = p.getString("cursorShape", D.cursorShape) ?: "",
+            cursorFill = p.getString("cursorFill", D.cursorFill) ?: "fill",
+            cursorGlow = p.getBoolean("cursorGlow", D.cursorGlow),
+            tbState = p.getString("tbState", D.tbState) ?: ""
         )
     }
 
@@ -54,6 +58,10 @@ object PreferenceHelper {
             putInt("kbStyle", s.kbStyle)
             putInt("ballWidthDp", s.ballWidthDp)
             putInt("ballHeightDp", s.ballHeightDp)
+            putString("cursorShape", s.cursorShape)
+            putString("cursorFill", s.cursorFill)
+            putBoolean("cursorGlow", s.cursorGlow)
+            putString("tbState", s.tbState)
             apply()
         }
     }

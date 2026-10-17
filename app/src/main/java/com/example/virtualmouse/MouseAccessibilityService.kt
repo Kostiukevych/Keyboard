@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -176,131 +177,105 @@ class MouseAccessibilityService : AccessibilityService() {
 
 
     // ======================================================================
-    //  Плавный скролл колёсиком: палец непрерывно едет за движением колёсика
+    //  Скролл колёсиком: серия коротких свайпов от позиции курсора.
+    //  Каждый свайп длиннее порога касания (touch slop), поэтому страница
+    //  гарантированно едет, а не воспринимает жест как тап. Скорость свайпа
+    //  берётся из скорости самого колёсика: быстро крутишь — страница летит
+    //  и немного «докатывается», медленно — едет точно за пальцем.
     // ======================================================================
 
-    private var sStroke: GestureDescription.StrokeDescription? = null
     private var sActive = false
     private var sBusy = false
-    private var sEnding = false
-    private var sRecenter = false
-    private var sAx = 0f   // якорь: X и Y курсора в момент касания колёсика
+    private var sAx = 0f
     private var sAy = 0f
-    private var sFy = 0f   // Y последней отправленной точки пальца
-    private var sTy = 0f   // целевая Y пальца
-    private var sOff = 0f
+    private var sAcc = 0f      // накопленный путь страницы, px; > 0 — страница едет вниз
+    private var sRate = 0f     // сглаженная скорость колёсика, px/мс
+    private var sLastT = 0L
+    private val sWatchdog = Runnable {
+        sBusy = false
+        sPump()
+    }
 
-    private fun sLo() = 32f * resources.displayMetrics.density
-    private fun sHi() = screen().second - 72f * resources.displayMetrics.density
+    private fun dpf(v: Float) = v * resources.displayMetrics.density
 
     fun scrollBegin(x: Float, y: Float) {
         sActive = true
-        sEnding = false
-        sRecenter = false
-        sAx = cx(x); sAy = cy(y)
-        sFy = sAy; sTy = sAy
-        if (sStroke == null && !sBusy) sStartStroke()
+        sAx = cx(x)
+        sAy = cy(y)
+        sAcc = 0f
+        sRate = 0f
+        sLastT = SystemClock.uptimeMillis()
     }
 
-    /** dy > 0 — колёсико тянут вниз: страница едет вниз, палец движется вверх. */
+    /** dy > 0 — колёсико тянут вниз: страница едет вниз, палец-свайп идёт вверх. */
     fun scrollBy(dy: Float, gain: Float = 2.2f) {
-        if (!sActive || sEnding) return
-        sTy -= dy * gain
-        sNext()
+        if (!sActive) return
+        val now = SystemClock.uptimeMillis()
+        val dt = (now - sLastT).coerceIn(1L, 120L)
+        sLastT = now
+        val d = dy * gain
+        sRate = sRate * 0.6f + (kotlin.math.abs(d) / dt) * 0.4f
+        sAcc += d
+        sPump()
     }
 
     fun scrollEnd() {
-        if (!sActive) return
-        sEnding = true
-        sNext()
+        // Уже накопленный хвост доезжает сам (sPump продолжает, пока он длиннее порога)
+        sActive = false
     }
 
-    private fun sStartStroke() {
-        sFy = sAy
-        val s = GestureDescription.StrokeDescription(Path().apply { moveTo(sAx, sAy) }, 0, 1, true)
-        sStroke = s
-        sDispatch(s, false)
-    }
+    private fun sPump() {
+        if (sBusy) return
+        val minStep = dpf(36f)
+        if (kotlin.math.abs(sAcc) < minStep) return
 
-    private fun sSend(s: GestureDescription.StrokeDescription, ty: Float) {
-        val p = Path().apply { moveTo(sAx, sFy); lineTo(sAx, ty) }
-        val n = s.continueStroke(p, 0, 16, true)
-        sFy = ty
-        sStroke = n
-        sDispatch(n, false)
-    }
+        val slop = dpf(12f)                         // запас на «мёртвую зону» касания
+        val sh = screen().second.toFloat()
+        val top = dpf(48f)
+        val bottom = sh - dpf(72f)
+        val dir = if (sAcc > 0f) 1 else -1          // 1: страница вниз, палец вверх
+        val want = min(kotlin.math.abs(sAcc), dpf(420f))
 
-    /** Поднимаем палец после короткой паузы на месте, чтобы не было инерции (fling). */
-    private fun sLift(s: GestureDescription.StrokeDescription, recenter: Boolean) {
-        val p = Path().apply { moveTo(sAx, sFy) }
-        val n = s.continueStroke(p, 0, 60, false)
-        sStroke = null
-        sRecenter = recenter
-        sDispatch(n, true)
-    }
+        var len = want + slop
+        var startY = sAy
+        val room = if (dir > 0) sAy - top else bottom - sAy
+        if (len > room) {
+            if (room >= minStep + slop) {
+                len = room                          // едем до края экрана от курсора
+            } else {
+                // курсор у самого края: начинаем свайп с другого места
+                len = min(len, bottom - top)
+                startY = if (dir > 0) min(bottom, top + len) else max(top, bottom - len)
+            }
+        }
+        val endY = startY - dir * len
+        sAcc -= dir * max(len - slop, 0f)
 
-    private fun sDispatch(s: GestureDescription.StrokeDescription, lifting: Boolean) {
+        val v = sRate.coerceIn(0.45f, 3.0f)         // px/мс
+        val dur = (len / v).toLong().coerceIn(70L, 320L)
+
+        val p = Path().apply {
+            moveTo(sAx, startY)
+            lineTo(sAx, endY)
+        }
         sBusy = true
-        val ok = send(s, object : GestureResultCallback() {
-            override fun onCompleted(g: GestureDescription?) {
-                sBusy = false
-                if (lifting) {
-                    if (sEnding) {
-                        sActive = false
-                        sEnding = false
-                        sRecenter = false
-                        return
-                    }
-                    if (sRecenter) {
-                        sRecenter = false
-                        sFy = sAy
-                        sTy = sAy + sOff
-                    }
-                }
-                sNext()
-            }
-
-            override fun onCancelled(g: GestureDescription?) {
-                sBusy = false
-                sStroke = null
-                sRecenter = false
-                if (sEnding) {
-                    sActive = false
-                    sEnding = false
-                } else {
-                    sTy = sAy + (sTy - sFy)
-                    sFy = sAy
-                }
-            }
+        ui.removeCallbacks(sWatchdog)
+        ui.postDelayed(sWatchdog, dur + 800)
+        val ok = send(GestureDescription.StrokeDescription(p, 0, dur), object : GestureResultCallback() {
+            override fun onCompleted(g: GestureDescription?) = sDone()
+            override fun onCancelled(g: GestureDescription?) = sDone()
         })
         if (!ok) {
             sBusy = false
-            sStroke = null
-            sActive = false
-            sEnding = false
+            sAcc = 0f
+            ui.removeCallbacks(sWatchdog)
         }
     }
 
-    private fun sNext() {
-        if (sBusy || !sActive) return
-        val s = sStroke
-        if (s == null) {
-            if (!sEnding) sStartStroke() else sActive = false
-            return
-        }
-        val ty = sTy.coerceIn(min(sLo(), sHi()), max(sLo(), sHi()))
-        if (sEnding) {
-            if (ty != sFy) sSend(s, ty) else sLift(s, false)
-            return
-        }
-        if (sTy == sFy) return
-        if (ty != sFy) {
-            sSend(s, ty)
-            return
-        }
-        // Дошли до края экрана: поднимаем палец и продолжаем от позиции курсора
-        sOff = sTy - sFy
-        sLift(s, true)
+    private fun sDone() {
+        sBusy = false
+        ui.removeCallbacks(sWatchdog)
+        sPump()
     }
 
     // ======================================================================

@@ -116,6 +116,7 @@ class SettingsWindow(
             b.setOnClickListener {
                 sounds.beep(340)
                 settings.cursorStyle = i
+                settings.cursorShape = ""   // вернуть классический курсор вместо формы из трекбола
                 refreshStyle()
                 onChanged()
             }
