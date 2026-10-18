@@ -28,6 +28,9 @@ import kotlin.math.roundToInt
 /** Во сколько раз страница едет быстрее пальца на колёсике (больше — быстрее). */
 private const val WHEEL_GAIN = 2.2f
 
+/** Удержание ЛКМ дольше этого времени = «кнопка мыши зажата»: рисуется рамка захвата (короче — обычный клик). */
+private const val GRAB_DELAY_MS = 250L
+
 class TouchpadWindow(
     private val ctx: Context,
     private val wm: WindowManager,
@@ -67,9 +70,17 @@ class TouchpadWindow(
     private var rBoxStartX = 0f
     private var rBoxStartY = 0f
 
-    private var held = false
+    private var held = false          // ЛКМ зафиксирована (удержана ≥ 1 с), палец уже можно убрать
     private var charging = false
     private var chargeStart = 0L
+
+    // Рамка захвата ЛКМ: grabbing = кнопка зажата, hasGrab = рамка осталась как выделение
+    private var grabbing = false
+    private var hasGrab = false
+    private var dragging = false      // идёт настоящее перетаскивание жестом (после фиксации)
+    private val grabRun = Runnable {
+        if (charging && !held && !grabbing) beginGrab()
+    }
 
     private var rClickCount = 0
     private var rClickTimer: Runnable? = null
@@ -132,8 +143,13 @@ class TouchpadWindow(
     }
 
     override fun hide() {
+        handler.removeCallbacks(grabRun)
         stopCharge()
-        if (held) release()
+        if (held || grabbing) {
+            held = false
+            finishGrab()
+        }
+        clearGrab()
         if (rBoxSelecting) {
             cursor.endSelection()
             MouseAccessibilityService.instance?.dragEnd()
@@ -161,7 +177,7 @@ class TouchpadWindow(
     private fun applyColors() {
         val s = getSettings()
         wheelView?.accentColor = s.padColor
-        leftHz?.setBackgroundColor(if (held) Color.WHITE else s.padColor)
+        leftHz?.setBackgroundColor(if (held || grabbing) Color.WHITE else s.padColor)
         rightHz?.setBackgroundColor(s.padColor)
         root?.findViewById<TextView>(R.id.pad_title)?.setTextColor(s.padColor)
     }
@@ -185,27 +201,72 @@ class TouchpadWindow(
         }
     }
 
+    /** ЛКМ зажата как на физической мыши: от курсора начинает расти рамка захвата. */
+    private fun beginGrab() {
+        if (svc() == null) {
+            stopCharge()
+            return
+        }
+        cursor.startSelection(cursor.x, cursor.y)
+        grabbing = true
+        hasGrab = false
+        leftHz?.setBackgroundColor(Color.WHITE)
+        sounds.beep(320)
+        vibrate(25)
+    }
+
+    /** Удержание ≥ 1 с: фиксируем нажатие (палец можно убрать) и включаем настоящее перетаскивание. */
     private fun engage() {
-        val a = svc()
-        if (a == null) {
+        if (!grabbing) beginGrab()
+        val a = MouseAccessibilityService.instance
+        if (!grabbing || a == null) {
             leftFill?.layoutParams?.width = 0
             leftFill?.requestLayout()
             return
         }
         a.dragStart(cursor.x, cursor.y)
+        dragging = true
         held = true
         leftHz?.setBackgroundColor(Color.WHITE)
         sounds.beep(500)
         vibrate(40)
     }
 
-    private fun release() {
-        MouseAccessibilityService.instance?.dragEnd()
-        held = false
+    /** Кнопку мыши отпустили: рамка остаётся на экране как выделение. */
+    private fun finishGrab() {
+        val a = MouseAccessibilityService.instance
+        if (dragging) {
+            a?.dragEnd()
+            dragging = false
+        }
+        grabbing = false
+        val r = cursor.selectionRect()
+        val ok = r != null && a != null && a.grabFinish(r.left, r.top, r.right, r.bottom)
+        if (ok) {
+            cursor.holdSelection()
+            hasGrab = true
+        } else {
+            cursor.endSelection()
+            hasGrab = false
+        }
+        sounds.beep(180)
         leftHz?.setBackgroundColor(getSettings().padColor)
         leftFill?.layoutParams?.width = 0
         leftFill?.requestLayout()
-        sounds.beep(180)
+    }
+
+    /** Следующее нажатие ЛКМ после фиксации. */
+    private fun release() {
+        held = false
+        finishGrab()
+    }
+
+    /** Убирает рамку и «выделение» (как клик мимо на физической мыши). */
+    private fun clearGrab() {
+        if (grabbing || rBoxSelecting) return      // рамка сейчас рисуется — не трогаем
+        hasGrab = false
+        cursor.endSelection()
+        MouseAccessibilityService.instance?.grabClear()
     }
 
     private val tick = object : Runnable {
@@ -345,6 +406,7 @@ class TouchpadWindow(
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     closeContextMenu()
+                    clearGrab()
                     v.alpha = 0.8f
                     if (held) {
                         release()
@@ -355,20 +417,32 @@ class TouchpadWindow(
                         chargeStart = SystemClock.uptimeMillis()
                         sounds.beep(220)
                         handler.post(tick)
+                        handler.removeCallbacks(grabRun)
+                        handler.postDelayed(grabRun, GRAB_DELAY_MS)
                     }
                 }
                 MotionEvent.ACTION_UP -> {
                     v.alpha = 1f
-                    if (!ignoreUp && charging) {
-                        stopCharge()
-                        svc()?.click(cursor.x, cursor.y)
-                        sounds.beep(180)
+                    handler.removeCallbacks(grabRun)
+                    if (!ignoreUp && !held) {
+                        if (grabbing) {
+                            // зажимали, но не фиксировали: отпустили кнопку — рамка завершена
+                            stopCharge()
+                            finishGrab()
+                        } else if (charging) {
+                            // короткое нажатие = обычный клик
+                            stopCharge()
+                            svc()?.click(cursor.x, cursor.y)
+                            sounds.beep(180)
+                        }
                     }
                     ignoreUp = false
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     v.alpha = 1f
+                    handler.removeCallbacks(grabRun)
                     stopCharge()
+                    if (grabbing && !held) finishGrab()
                 }
             }
             true
@@ -400,7 +474,8 @@ class TouchpadWindow(
                         openContextMenu()
                     } else {
                         val duration = SystemClock.uptimeMillis() - rDownTime
-                        if (held) {
+                        if (held || grabbing || hasGrab) {
+                            // есть рамка захвата / зажата ЛКМ: ПКМ открывает меню (Копировать и т.д.)
                             sounds.beep(160)
                             openContextMenu()
                         } else if (duration < 400) {
@@ -455,6 +530,7 @@ class TouchpadWindow(
                 sounds.beep(180)
                 closeContextMenu()
                 svc()?.let(run)
+                clearGrab()
             }
         }
         act(R.id.ctx_refresh) { it.refreshPage() }
@@ -475,6 +551,7 @@ class TouchpadWindow(
                 MotionEvent.ACTION_DOWN -> {
                     v.parent?.requestDisallowInterceptTouchEvent(true)
                     closeContextMenu()
+                    clearGrab()
                     last = e.rawY
                     tickAcc = 0f
                     // Палец «ставится» на позицию курсора и дальше едет вместе с колёсиком
@@ -542,14 +619,16 @@ class TouchpadWindow(
                                 svc()?.boxSelectMove(cursor.x, cursor.y)
                             }
                         }
-                    } else if (held) {
-                        // Зажатый ЛКМ-режим (замок) активен
-                        MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+                    } else if (grabbing) {
+                        // ЛКМ зажата: тянем рамку захвата; после фиксации ещё и настоящий drag
+                        cursor.updateSelection(cursor.x, cursor.y)
+                        if (dragging) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                     cursor.setPressed(false)
-                    if (!rDown && !rBoxSelecting && !far && !held && e.eventTime - t0 < 250) {
+                    if (!rDown && !rBoxSelecting && !far && !held && !grabbing && e.eventTime - t0 < 250) {
+                        clearGrab()
                         svc()?.click(cursor.x, cursor.y)
                         sounds.beep(180)
                     }

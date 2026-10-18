@@ -36,9 +36,9 @@ private const val BALL_ASPECT = 1.15f
 
 /**
  * Трекбол Orbit X: прозрачное окно, в котором виден только сам трекбол (без рамки тачпада).
- *  - шар — движение курсора, ЛКМ (удержание 0.8 с = перетаскивание), ПКМ (дважды = меню правки, зажатие > 100мс + движение шара = выделение рамкой),
+ *  - шар — движение курсора, ЛКМ (зажатие >= 250 мс = рамка захвата, 1 с = фиксация/перетаскивание), ПКМ (дважды = меню правки, зажатие > 100мс + движение шара = выделение рамкой),
  *  - колёсико — скролл,
- *  - двойное нажатие на ЛКМ — меню: тачпад, настройки, замок, файлы, клавиатура, правка,
+ *  - тап по колёсику без прокрутки — меню: тачпад, настройки, замок, файлы, клавиатура, правка,
  *  - корпус трекбола можно таскать пальцем (если не закреплён замком).
  * Все настройки (курсоры, скин, поворот, чувствительность) — в HTML-панели trackball.html.
  */
@@ -74,8 +74,12 @@ class TrackballWindow(
     private var ctxMenu: View? = null
 
     private var held = false
+    private var grabbing = false
+    private var hasGrab = false
+    private var dragging = false
     private var leftPending = false
     private var leftIgnore = false
+    private val grabRun = Runnable { beginGrab() }
     private val engageRun = Runnable {
         leftPending = false
         engage()
@@ -174,9 +178,14 @@ class TrackballWindow(
     }
 
     override fun hide() {
+        handler.removeCallbacks(grabRun)
         handler.removeCallbacks(engageRun)
         leftPending = false
-        if (held) release()
+        if (held || grabbing) {
+            held = false
+            finishGrab()
+        }
+        clearGrab()
         if (rBoxSelecting) {
             cursor.endSelection()
             MouseAccessibilityService.instance?.dragEnd()
@@ -253,7 +262,7 @@ class TrackballWindow(
             o.put("sens", s.sensitivity.toDouble())
             o.put("ws", s.ballWidthDp.toDouble() / BALL_BASE_DP)
             o.put("locked", s.padLocked)
-            o.put("sel", rBoxSelecting)
+            o.put("sel", rBoxSelecting || grabbing)
             return o.toString()
         }
 
@@ -281,8 +290,9 @@ class TrackballWindow(
                     svc()?.boxSelectMove(cursor.x, cursor.y)
                 }
             }
-        } else if (held) {
-            MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+        } else {
+            if (grabbing) cursor.updateSelection(cursor.x, cursor.y)
+            if (dragging) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
         }
     }
 
@@ -356,35 +366,78 @@ class TrackballWindow(
             "kb" -> onKeyboard()
             "appset" -> onSettings()
             "close" -> onHide()
-            "refresh" -> svc()?.refreshPage()
-            "undo" -> svc()?.undo()
-            "redo" -> svc()?.redo()
-            "cut" -> svc()?.cutSelection()
-            "copy" -> svc()?.copySelection()
-            "paste" -> svc()?.pasteFromBuffer()
-            "delete" -> svc()?.deleteSelection()
-            "all" -> svc()?.selectAllText()
+            "refresh" -> { svc()?.refreshPage(); clearGrab() }
+            "undo" -> { svc()?.undo(); clearGrab() }
+            "redo" -> { svc()?.redo(); clearGrab() }
+            "cut" -> { svc()?.cutSelection(); clearGrab() }
+            "copy" -> { svc()?.copySelection(); clearGrab() }
+            "paste" -> { svc()?.pasteFromBuffer(); clearGrab() }
+            "delete" -> { svc()?.deleteSelection(); clearGrab() }
+            "all" -> { svc()?.selectAllText(); clearGrab() }
         }
     }
 
-    // ---------- ЛКМ: тап = клик, удержание = перетаскивание до следующего нажатия ----------
+    // ---------- ЛКМ: тап = клик, зажатие >= 250 мс = рамка захвата, 1 с = фиксация ----------
 
+    /** ЛКМ зажата как на физической мыши: от курсора начинает расти рамка захвата. */
+    private fun beginGrab() {
+        if (svc() == null) return
+        cursor.startSelection(cursor.x, cursor.y)
+        grabbing = true
+        hasGrab = false
+        sounds.beep(320)
+        vibrate(25)
+    }
+
+    /** Удержание >= 1 с: фиксируем нажатие и включаем настоящее перетаскивание. */
     private fun engage() {
-        val a = svc() ?: return
+        if (!grabbing) beginGrab()
+        val a = MouseAccessibilityService.instance
+        if (!grabbing || a == null) return
         a.dragStart(cursor.x, cursor.y)
+        dragging = true
         held = true
         sounds.beep(500)
         vibrate(40)
     }
 
-    private fun release() {
-        MouseAccessibilityService.instance?.dragEnd()
-        held = false
+    /** Кнопку мыши отпустили: рамка остаётся на экране как выделение. */
+    private fun finishGrab() {
+        val a = MouseAccessibilityService.instance
+        if (dragging) {
+            a?.dragEnd()
+            dragging = false
+        }
+        grabbing = false
+        val r = cursor.selectionRect()
+        val ok = r != null && a != null && a.grabFinish(r.left, r.top, r.right, r.bottom)
+        if (ok) {
+            cursor.holdSelection()
+            hasGrab = true
+        } else {
+            cursor.endSelection()
+            hasGrab = false
+        }
         sounds.beep(180)
+    }
+
+    /** Следующее нажатие ЛКМ после фиксации. */
+    private fun release() {
+        held = false
+        finishGrab()
+    }
+
+    /** Убирает рамку и «выделение» (как клик мимо на физической мыши). */
+    private fun clearGrab() {
+        if (grabbing || rBoxSelecting) return
+        hasGrab = false
+        cursor.endSelection()
+        MouseAccessibilityService.instance?.grabClear()
     }
 
     private fun leftDown() {
         closeContextMenu()
+        clearGrab()
         if (held) {
             release()
             leftIgnore = true
@@ -392,15 +445,23 @@ class TrackballWindow(
             leftIgnore = false
             leftPending = true
             sounds.beep(220)
-            handler.postDelayed(engageRun, 800)
+            handler.removeCallbacks(grabRun)
+            handler.removeCallbacks(engageRun)
+            handler.postDelayed(grabRun, 250L)
+            handler.postDelayed(engageRun, 1000L)
         }
     }
 
     private fun leftUp() {
+        handler.removeCallbacks(grabRun)
         handler.removeCallbacks(engageRun)
-        if (!leftIgnore && leftPending) {
-            svc()?.click(cursor.x, cursor.y)
-            sounds.beep(180)
+        if (!leftIgnore && !held) {
+            if (grabbing) {
+                finishGrab()
+            } else if (leftPending) {
+                svc()?.click(cursor.x, cursor.y)
+                sounds.beep(180)
+            }
         }
         leftPending = false
         leftIgnore = false
@@ -429,7 +490,7 @@ class TrackballWindow(
             openContextMenu()
         } else {
             val duration = SystemClock.uptimeMillis() - rDownTime
-            if (held) {
+            if (held || grabbing || hasGrab) {
                 sounds.beep(160)
                 openContextMenu()
             } else if (duration < 400) {
@@ -460,6 +521,7 @@ class TrackballWindow(
 
     private fun wheelStart() {
         closeContextMenu()
+        clearGrab()
         tickAcc = 0f
         svc()?.scrollBegin(cursor.x, cursor.y)
     }
@@ -493,6 +555,7 @@ class TrackballWindow(
                 sounds.beep(180)
                 closeContextMenu()
                 svc()?.let(run)
+                clearGrab()
             }
         }
         act(R.id.ctx_refresh) { it.refreshPage() }

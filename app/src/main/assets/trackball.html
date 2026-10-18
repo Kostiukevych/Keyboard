@@ -230,7 +230,7 @@ html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:n
   var P=function(a,o){return 'M'+a.map(function(q){return (q[0]*2+o)+' '+(q[1]*2+o)}).join('L')+'Z'};
   var SH={arrow:{d:'M3 2L3 23L8.5 18L12.5 27L16 25.5L12 16.8L19.5 16.8Z',x:3,y:2},
     sharp:{d:'M10 7.7L23.4 20.8H15.7L10 26.1Z',x:10,y:7.7},
-    hand:{d:P([[5,0],[7,0],[7,5],[9,5],[9,6],[11,6],[11,7],[13,7],[13,12],[12,12],[12,15],[6,15],[6,14],[4,12],[2,10],[2,9],[1,9],[1,8],[3,8],[4,9],[4,10],[5,10]],1),x:12,y:1,j:'miter'},
+    hand:{d:P([[5,0],[7,0],[7,5],[9,5],[9,6],[11,6],[11,7],[13,7],[13,12],[12,12],[12,15],[6,15],[6,14],[4,12],[2,10],[2,10],[1,9],[1,8],[3,8],[4,9],[4,10],[5,10]],1),x:12,y:1,j:'miter'},
     dot:{d:'M9 16a7 7 0 1 0 14 0a7 7 0 1 0 -14 0Z',x:16,y:16},
     ring:{d:'M7 16a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z',x:16,y:16,line:1},
     cross:{d:'M16 3V12M16 20V29M3 16H12M20 16H29',x:16,y:16,line:1},
@@ -326,6 +326,7 @@ html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:n
     if(wmv<6){
       [].forEach.call(document.querySelectorAll('.tgt'),function(t){t.classList.remove('on','alt')});
       wh.classList.add('tap');setTimeout(function(){wh.classList.remove('tap')},120);wv=0;
+      if(AND)openPanel('menu');
     }else if(performance.now()-wlt>80)wv=0;
   }
   wh.addEventListener('pointerup',wup);wh.addEventListener('pointercancel',wup);
@@ -386,16 +387,11 @@ html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:n
   [['refresh','Обновить'],['undo','Отменить'],['redo','Повторить'],['cut','Вырезать'],['copy','Копировать'],['paste','Вставить'],['delete','Удалить'],['all','Выделить всё']].forEach(function(a){mbtn(g3,a[0],a[1])});
   menu.querySelector('#mx').onclick=closePanel;
 
-  var lastKl=0,klDbl=false;
   function openSet(){if(AND){if(dlg.hidden||!root.classList.contains('pm'))openPanel('set');else closePanel()}else dlg.hidden=!dlg.hidden}
   if(AND){
     var KL=document.getElementById('kl'),KR=document.getElementById('kr'),SV=document.querySelector('.mouse svg');
-    KL.addEventListener('pointerdown',function(){
-      var n=performance.now();
-      if(n-lastKl<380){klDbl=true;lastKl=0;openPanel('menu');return}   /* второй тап: открыть меню вместо клика */
-      klDbl=false;lastKl=n;Android.onLeft(1);
-    });
-    ['pointerup','pointercancel'].forEach(function(n){KL.addEventListener(n,function(){if(klDbl){klDbl=false;return}Android.onLeft(0)})});
+    KL.addEventListener('pointerdown',function(){Android.onLeft(1)});
+    ['pointerup','pointercancel'].forEach(function(n){KL.addEventListener(n,function(){Android.onLeft(0)})});
     KR.addEventListener('pointerdown',function(){Android.onRight(1)});
     ['pointerup','pointercancel'].forEach(function(n){KR.addEventListener(n,function(){Android.onRight(0)})});
     /* корпус трекбола (всё, что не кнопки и не колесо) таскает окно целиком */

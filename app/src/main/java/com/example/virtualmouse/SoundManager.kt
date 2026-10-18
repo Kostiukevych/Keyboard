@@ -30,8 +30,21 @@ class SoundManager(private val context: Context, private val isSoundEnabled: () 
 
     companion object {
         private const val SAMPLE_RATE = 44100
+        private const val PREFS_NAME = "virtual_mouse_prefs"
+        private const val KEY_SOUND = "soundOn"
+
         @Volatile
         private var instance: SoundManager? = null
+
+        /**
+         * Включает/выключает звук немедленно и для всех (оверлей, клавиатура, настройки).
+         * Пишет прямо в SharedPreferences, поэтому сразу видно каждому, кто спрашивает.
+         */
+        fun setEnabled(context: Context, on: Boolean) {
+            context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_SOUND, on).apply()
+        }
 
         fun get(context: Context, isSoundEnabled: () -> Boolean): SoundManager {
             return instance ?: synchronized(this) {
@@ -98,7 +111,7 @@ class SoundManager(private val context: Context, private val isSoundEnabled: () 
      * f: условная частота действия (120..500)
      */
     fun beep(f: Int = 180) {
-        if (!isSoundEnabled()) return
+        if (!enabledNow()) return
         val targetKey = when {
             f <= 140 -> 120
             f <= 200 -> 180
@@ -115,10 +128,23 @@ class SoundManager(private val context: Context, private val isSoundEnabled: () 
      * Сухой механический щелчок храповика колёсика с чередованием тональности.
      */
     fun wheelTick() {
-        if (!isSoundEnabled()) return
+        if (!enabledNow()) return
         wheelFlip = !wheelFlip
         val key = if (wheelFlip) 1001 else 1002
         playSound(key, 0.95f)
+    }
+
+    /**
+     * Источник правды — SharedPreferences, читаются при каждом звуке (это кэш в памяти, дёшево).
+     * Раньше решение принимала лямбда того, кто первым создал SoundManager (например клавиатура
+     * со своей копией настроек), и она никогда не обновлялась — поэтому звук не выключался.
+     * Лямбда осталась только как значение по умолчанию, пока ключа в настройках нет.
+     */
+    private fun enabledNow(): Boolean = try {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_SOUND, isSoundEnabled())
+    } catch (_: Exception) {
+        isSoundEnabled()
     }
 
     private fun playSound(key: Int, volume: Float) {

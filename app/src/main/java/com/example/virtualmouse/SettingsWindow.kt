@@ -166,9 +166,26 @@ class SettingsWindow(
         val cbSound = v.findViewById<CheckBox>(R.id.cb_sound)
         cbSound.isChecked = settings.soundOn
         cbSound.setOnCheckedChangeListener { _, checked ->
+            SoundManager.setEnabled(ctx, checked)
             settings.soundOn = checked
             sounds.beep(if (checked) 380 else 180)
             onChanged()
+        }
+
+        // Файловый менеджер
+        val tvFm = v.findViewById<TextView>(R.id.tv_file_manager)
+        tvFm.text = FileManagerLauncher.savedLabel(ctx)
+        val overlay = v.findViewById<View>(R.id.file_picker_overlay)
+        val pickerList = v.findViewById<LinearLayout>(R.id.file_picker_list)
+        v.findViewById<TextView>(R.id.file_picker_title).text = "Выберите файловый менеджер"
+        v.findViewById<View>(R.id.row_file_manager).setOnClickListener {
+            sounds.beep(260)
+            fillFilePicker(pickerList, overlay, tvFm, false)
+            overlay.visibility = View.VISIBLE
+        }
+        v.findViewById<View>(R.id.file_picker_close).setOnClickListener {
+            sounds.beep(180)
+            overlay.visibility = View.GONE
         }
 
         // Кнопка Готово
@@ -180,6 +197,54 @@ class SettingsWindow(
         binding = false
         refreshPalettes()
         return v
+    }
+
+    /** Строит список выбора файлового менеджера прямо в оверлее (AlertDialog из оверлея недоступен). */
+    private fun fillFilePicker(list: LinearLayout, overlay: View, tvFm: TextView, showAll: Boolean) {
+        list.removeAllViews()
+        val saved = FileManagerLauncher.getSaved(ctx)
+
+        fun addItem(text: String, selected: Boolean, accent: Boolean, onClick: () -> Unit) {
+            val tv = TextView(ctx).apply {
+                this.text = text
+                textSize = 14f
+                setTextColor(if (accent) ContextCompat.getColor(ctx, R.color.acc_soft) else Color.WHITE)
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(10).toFloat()
+                    setColor(
+                        if (selected) ColorUtils.setAlphaComponent(Color.WHITE, 0x33)
+                        else ColorUtils.setAlphaComponent(Color.WHITE, 0x0D)
+                    )
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, dp(3), 0, dp(3)) }
+                setOnClickListener { onClick() }
+            }
+            list.addView(tv)
+        }
+
+        fun choose(pkg: String) {
+            FileManagerLauncher.save(ctx, pkg)
+            tvFm.text = FileManagerLauncher.savedLabel(ctx)
+            sounds.beep(420)
+            overlay.visibility = View.GONE
+        }
+
+        if (!showAll) addItem("Авто (ваш менеджер)", saved.isEmpty(), false) { choose("") }
+        val apps = if (showAll) FileManagerLauncher.allLaunchable(ctx) else FileManagerLauncher.candidates(ctx)
+        apps.forEach { app ->
+            val label = if (app.system) app.label + " (системный)" else app.label
+            addItem(label, app.pkg == saved, false) { choose(app.pkg) }
+        }
+        if (!showAll) {
+            addItem("Показать все приложения…", false, true) {
+                sounds.beep(260)
+                fillFilePicker(list, overlay, tvFm, true)
+            }
+        }
     }
 
     private fun addBubblePalette(container: LinearLayout, getCur: () -> Int, setCur: (Int) -> Unit) {

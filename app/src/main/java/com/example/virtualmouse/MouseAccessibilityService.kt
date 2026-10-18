@@ -36,6 +36,15 @@ class MouseAccessibilityService : AccessibilityService() {
     private var ending = false
     private val ui = Handler(Looper.getMainLooper())
 
+    /**
+     * Рамка захвата (экранные координаты), которую пользователь только что обвёл мышью.
+     * Служит «выделением»: «Копировать» берёт текст под рамкой, даже если приложение само
+     * ничего не выделило. Сбрасывается любым кликом, началом скролла и командой grabClear().
+     */
+    @Volatile
+    var grabRect: Rect? = null
+        private set
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -78,14 +87,35 @@ class MouseAccessibilityService : AccessibilityService() {
             false
         }
 
-    private fun tap(x: Float, y: Float, duration: Long) {
+    /**
+     * Тап одним касанием. Раньше его мог молча оборвать другой жест (скролл, перетаскивание)
+     * или касание пальца по экрану — клик «не срабатывал». Теперь:
+     *  - если в этот момент летит свайп скролла, ждём его завершения;
+     *  - если жест отменён или не принят системой, повторяем до 3 раз.
+     */
+    private fun tap(x: Float, y: Float, duration: Long, attempt: Int = 0) {
+        if (sBusy && attempt < 4) {
+            ui.postDelayed({ tap(x, y, duration, attempt + 1) }, 70)
+            return
+        }
         val p = Path().apply { moveTo(cx(x), cy(y)) }
-        send(GestureDescription.StrokeDescription(p, 0, duration))
+        val ok = send(GestureDescription.StrokeDescription(p, 0, duration), object : GestureResultCallback() {
+            override fun onCancelled(g: GestureDescription?) {
+                if (attempt < 3) ui.postDelayed({ tap(x, y, duration, attempt + 1) }, 60)
+            }
+        })
+        if (!ok && attempt < 3) ui.postDelayed({ tap(x, y, duration, attempt + 1) }, 60)
     }
 
-    fun click(x: Float, y: Float) = tap(x, y, 50)
+    fun click(x: Float, y: Float) {
+        grabRect = null
+        tap(x, y, 60)
+    }
 
-    fun rightClick(x: Float, y: Float) = tap(x, y, 600)
+    fun rightClick(x: Float, y: Float) {
+        grabRect = null
+        tap(x, y, 600)
+    }
 
     /**
      * Надежный жест скролла:
@@ -200,50 +230,132 @@ class MouseAccessibilityService : AccessibilityService() {
     fun boxSelectEnd(x1: Float, y1: Float, x2: Float, y2: Float) {
         dragMove(x2, y2)
         dragEnd()
+        grabFinish(x1, y1, x2, y2)
+    }
 
-        val left = minOf(x1, x2).toInt()
-        val top = minOf(y1, y2).toInt()
-        val right = maxOf(x1, x2).toInt()
-        val bottom = maxOf(y1, y2).toInt()
-        val rect = Rect(left, top, right, bottom)
+    // ======================================================================
+    //  Рамка захвата как выделение (используют тачпад и трекбол)
+    // ======================================================================
 
-        // Проверяем дерево доступности для выделения в полях ввода и текстовых блоках
+    /**
+     * Рамка завершена (кнопку мыши отпустили). Запоминаем её как «выделение» и, если приложение
+     * само ничего не выделило, пробуем выделить текст под рамкой через доступность.
+     * Возвращает false, если рамка слишком мала (это был просто клик/долгое нажатие).
+     */
+    fun grabFinish(x1: Float, y1: Float, x2: Float, y2: Float): Boolean {
+        val rect = Rect(
+            min(x1, x2).toInt(), min(y1, y2).toInt(),
+            max(x1, x2).toInt(), max(y1, y2).toInt()
+        )
+        if (rect.width() < dpf(10f) && rect.height() < dpf(10f)) {
+            grabRect = null
+            return false
+        }
+        grabRect = rect
         ui.postDelayed({
-            val root = rootInActiveWindow
-            if (root != null) {
-                findAndSelectInNode(root, rect, 0)
-            }
-        }, 150)
+            if (grabRect !== rect) return@postDelayed
+            if (selNode() != null) return@postDelayed   // приложение уже выделило само — не трогаем
+            val root = rootInActiveWindow ?: return@postDelayed
+            findAndSelectInNode(root, rect, 0)
+        }, 250)
+        return true
+    }
+
+    fun grabClear() {
+        grabRect = null
+    }
+
+    /**
+     * Какую часть текста узла покрывает рамка (индексы символов).
+     * Для однострочного узла считаем по горизонтали, для многострочного — по вертикали.
+     */
+    private fun sliceRange(b: Rect, rect: Rect, total: Int): Pair<Int, Int> {
+        if (rect.contains(b.left, b.top, b.right, b.bottom)) return 0 to total
+        val s: Float
+        val e: Float
+        if (b.height() <= dpf(48f)) {
+            val w = b.width().coerceAtLeast(1).toFloat()
+            s = ((rect.left - b.left) / w).coerceIn(0f, 1f)
+            e = ((rect.right - b.left) / w).coerceIn(0f, 1f)
+        } else {
+            val h = b.height().coerceAtLeast(1).toFloat()
+            s = ((rect.top - b.top) / h).coerceIn(0f, 1f)
+            e = ((rect.bottom - b.top) / h).coerceIn(0f, 1f)
+        }
+        val a = (s * total).toInt().coerceIn(0, total)
+        val c = (e * total).toInt().coerceIn(0, total)
+        return min(a, c) to max(a, c)
     }
 
     private fun findAndSelectInNode(n: AccessibilityNodeInfo?, rect: Rect, depth: Int): Boolean {
         if (n == null || depth > 25) return false
         val b = Rect()
         n.getBoundsInScreen(b)
-        if (Rect.intersects(b, rect)) {
-            val text = n.text
-            if (!text.isNullOrEmpty()) {
-                val total = text.length
-                val sRatio = ((rect.top - b.top).toFloat() / b.height().coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-                val eRatio = ((rect.bottom - b.top).toFloat() / b.height().coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-                val sIdx = (sRatio * total).toInt().coerceIn(0, total)
-                val eIdx = (eRatio * total).toInt().coerceIn(0, total)
-                val start = min(sIdx, eIdx)
-                val end = max(sIdx, eIdx).coerceAtLeast(min(start + 1, total))
+        if (!Rect.intersects(b, rect)) return false
+        val text = n.text
+        if (!text.isNullOrEmpty() && !n.isPassword && !n.isShowingHintText) {
+            val (start, end) = sliceRange(b, rect, text.length)
+            if (end > start) {
                 val sel = Bundle().apply {
                     putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start)
                     putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end)
                 }
-                if (n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)) {
-                    return true
-                }
+                if (n.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel)) return true
             }
-            for (i in 0 until n.childCount) {
-                if (findAndSelectInNode(n.getChild(i), rect, depth + 1)) return true
-            }
+        }
+        for (i in 0 until n.childCount) {
+            if (findAndSelectInNode(n.getChild(i), rect, depth + 1)) return true
         }
         return false
     }
+
+    private class TextPiece(val top: Int, val left: Int, val text: String)
+
+    private fun collectText(n: AccessibilityNodeInfo?, rect: Rect, out: MutableList<TextPiece>, depth: Int) {
+        if (n == null || depth > 30 || !n.isVisibleToUser) return
+        val b = Rect()
+        n.getBoundsInScreen(b)
+        if (!Rect.intersects(b, rect)) return
+        val text = n.text
+        if (!text.isNullOrEmpty() && !n.isPassword && !n.isShowingHintText) {
+            val full = text.toString()
+            val (start, end) = sliceRange(b, rect, full.length)
+            if (end > start) {
+                val piece = full.substring(start, end).trim()
+                if (piece.isNotEmpty()) out.add(TextPiece(b.top, b.left, piece))
+            }
+        }
+        for (i in 0 until n.childCount) collectText(n.getChild(i), rect, out, depth + 1)
+    }
+
+    /** Весь текст, попавший под рамку (сверху вниз, слева направо). */
+    private fun textUnderRect(rect: Rect): String {
+        val root = rootInActiveWindow ?: return ""
+        val pieces = ArrayList<TextPiece>()
+        collectText(root, rect, pieces, 0)
+        if (pieces.isEmpty()) return ""
+        pieces.sortWith(compareBy<TextPiece>({ it.top }, { it.left }))
+        val lineTol = dpf(8f)
+        val sb = StringBuilder()
+        var prev: TextPiece? = null
+        for (p in pieces) {
+            val pr = prev
+            if (pr != null) {
+                if (p.text == pr.text && p.top == pr.top) continue          // дубль (родитель и потомок)
+                sb.append(if (kotlin.math.abs(p.top - pr.top) <= lineTol) " " else "\n")
+            }
+            sb.append(p.text)
+            prev = p
+        }
+        return sb.toString()
+    }
+
+    private fun nodeIntersects(n: AccessibilityNodeInfo, rect: Rect): Boolean {
+        val b = Rect()
+        n.getBoundsInScreen(b)
+        return Rect.intersects(b, rect)
+    }
+
 
     // ======================================================================
     //  Скролл колёсиком: серия коротких свайпов от позиции курсора.
@@ -256,19 +368,29 @@ class MouseAccessibilityService : AccessibilityService() {
     private var sAcc = 0f
     private var sRate = 0f
     private var sLastT = 0L
+    private var sFlight = 0f      // сколько пикселей «съел» свайп, который сейчас в полёте
+    private var sFails = 0        // сколько свайпов подряд отменила система
     private val sWatchdog = Runnable {
         sBusy = false
+        sFlight = 0f
         sPump()
     }
 
     private fun dpf(v: Float) = v * resources.displayMetrics.density
 
     fun scrollBegin(x: Float, y: Float) {
+        if (stroke != null) {
+            // идёт перетаскивание (ЛКМ зажата): второй жест поверх него оборвёт оба
+            sActive = false
+            return
+        }
+        grabRect = null
         sActive = true
         sAx = cx(x)
         sAy = cy(y)
         sAcc = 0f
         sRate = 0f
+        sFails = 0
         sLastT = SystemClock.uptimeMillis()
     }
 
@@ -291,12 +413,30 @@ class MouseAccessibilityService : AccessibilityService() {
         if (sBusy) return
         val minStep = dpf(36f)
         if (kotlin.math.abs(sAcc) < minStep) return
+        val dir = if (sAcc > 0f) 1 else -1
+
+        // Система отменяет «чужие» жесты, пока пользователь сам водит пальцем по экрану (а он как раз
+        // крутит колёсико пальцем) — свайпы отменялись один за другим и страница не ехала, а
+        // накопленный путь терялся. После двух отмен подряд листаем напрямую через узел
+        // доступности (прокручиваемый список/страница под курсором): этому касание не мешает.
+        if (sFails >= 2) {
+            val step = dpf(300f)
+            if (scrollNode(dir)) {
+                sAcc = if (kotlin.math.abs(sAcc) > step) sAcc - dir * step else 0f
+                sBusy = true
+                ui.postDelayed({ sBusy = false; sPump() }, 90)
+            } else {
+                // нечего прокручивать напрямую — сбрасываем счётчик, следующая порция попробует свайп снова
+                sAcc = 0f
+                sFails = 0
+            }
+            return
+        }
 
         val slop = dpf(12f)
         val sh = screen().second.toFloat()
         val top = dpf(48f)
         val bottom = sh - dpf(72f)
-        val dir = if (sAcc > 0f) 1 else -1
         val want = min(kotlin.math.abs(sAcc), dpf(420f))
 
         var len = want + slop
@@ -311,7 +451,9 @@ class MouseAccessibilityService : AccessibilityService() {
             }
         }
         val endY = startY - dir * len
-        sAcc -= dir * max(len - slop, 0f)
+        val consumed = dir * max(len - slop, 0f)
+        sAcc -= consumed
+        sFlight = consumed
 
         val v = sRate.coerceIn(0.45f, 3.0f)
         val dur = (len / v).toLong().coerceIn(70L, 320L)
@@ -324,13 +466,29 @@ class MouseAccessibilityService : AccessibilityService() {
         ui.removeCallbacks(sWatchdog)
         ui.postDelayed(sWatchdog, dur + 800)
         val ok = send(GestureDescription.StrokeDescription(p, 0, dur), object : GestureResultCallback() {
-            override fun onCompleted(g: GestureDescription?) = sDone()
-            override fun onCancelled(g: GestureDescription?) = sDone()
+            override fun onCompleted(g: GestureDescription?) {
+                sFails = 0
+                sFlight = 0f
+                sDone()
+            }
+
+            override fun onCancelled(g: GestureDescription?) {
+                // свайп не доехал — возвращаем путь в очередь, чтобы он не пропал
+                sAcc += sFlight
+                sFlight = 0f
+                sFails++
+                sBusy = false
+                ui.removeCallbacks(sWatchdog)
+                ui.postDelayed({ sPump() }, 30)
+            }
         })
         if (!ok) {
+            sAcc += sFlight
+            sFlight = 0f
+            sFails = 2          // жест не принят вообще — сразу на запасной путь
             sBusy = false
-            sAcc = 0f
             ui.removeCallbacks(sWatchdog)
+            ui.post { sPump() }
         }
     }
 
@@ -338,6 +496,60 @@ class MouseAccessibilityService : AccessibilityService() {
         sBusy = false
         ui.removeCallbacks(sWatchdog)
         sPump()
+    }
+
+    // ---------- Запасной скролл через дерево доступности ----------
+
+    private fun scrollNode(dir: Int): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val action = if (dir > 0) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+        else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        // 1) самый вложенный прокручиваемый узел под курсором, затем его родители
+        var cur: AccessibilityNodeInfo? = deepestScrollable(root, sAx.toInt(), sAy.toInt(), 0)
+        var guard = 0
+        while (cur != null && guard < 10) {
+            if (cur.isScrollable && cur.performAction(action)) return true
+            cur = cur.parent
+            guard++
+        }
+        // 2) курсор не над списком — берём самую большую прокручиваемую область окна
+        val big = largestScrollable(root, 0) ?: return false
+        return big.performAction(action)
+    }
+
+    private fun deepestScrollable(n: AccessibilityNodeInfo?, x: Int, y: Int, depth: Int): AccessibilityNodeInfo? {
+        if (n == null || depth > 30) return null
+        val b = Rect()
+        n.getBoundsInScreen(b)
+        if (!b.contains(x, y)) return null
+        for (i in n.childCount - 1 downTo 0) {
+            val r = deepestScrollable(n.getChild(i), x, y, depth + 1)
+            if (r != null) return r
+        }
+        return if (n.isScrollable) n else null
+    }
+
+    private fun largestScrollable(n: AccessibilityNodeInfo?, depth: Int): AccessibilityNodeInfo? {
+        if (n == null || depth > 30) return null
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = -1L
+        if (n.isScrollable && n.isVisibleToUser) {
+            val b = Rect()
+            n.getBoundsInScreen(b)
+            best = n
+            bestArea = b.width().toLong() * b.height().toLong()
+        }
+        for (i in 0 until n.childCount) {
+            val c = largestScrollable(n.getChild(i), depth + 1) ?: continue
+            val b = Rect()
+            c.getBoundsInScreen(b)
+            val area = b.width().toLong() * b.height().toLong()
+            if (area > bestArea) {
+                best = c
+                bestArea = area
+            }
+        }
+        return best
     }
 
     // ======================================================================
@@ -614,6 +826,24 @@ class MouseAccessibilityService : AccessibilityService() {
 
     fun copySelection() {
         val n = selNode()
+        val r = grabRect
+        // Реальное выделение в приложении берём, если оно относится к рамке (или рамки нет)
+        if (n != null && (r == null || nodeIntersects(n, r))) {
+            val (a, b) = selRange(n)
+            val t = n.text.toString().substring(a, b)
+            clipboard.add(t)
+            toast("В буфер: ${t.length} симв.")
+            return
+        }
+        // Рамка захвата работает как выделение: берём текст под ней
+        if (r != null) {
+            val t = textUnderRect(r)
+            if (t.isNotBlank()) {
+                clipboard.add(t)
+                toast("В буфер: ${t.length} симв.")
+                return
+            }
+        }
         if (n != null) {
             val (a, b) = selRange(n)
             val t = n.text.toString().substring(a, b)

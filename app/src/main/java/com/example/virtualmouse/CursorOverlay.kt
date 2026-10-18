@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -116,6 +117,10 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         }
     }
 
+    /**
+     * Рамка захвата как у физической мыши: полупрозрачная заливка, неоновая обводка,
+     * белый пунктир и угловые маркеры. held = кнопку отпустили, рамка осталась как «выделение».
+     */
     private inner class SelectionBoxView(c: Context) : View(c) {
         init {
             setLayerType(LAYER_TYPE_SOFTWARE, null)
@@ -126,6 +131,7 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         var ex = 0f
         var ey = 0f
         var active = false
+        var held = false
 
         private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
@@ -136,6 +142,13 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
         }
+        private val dashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+        }
+        private val cornerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+        private val rect = RectF()
 
         override fun onDraw(c: Canvas) {
             if (!active) return
@@ -146,12 +159,13 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
             if (r - l < 1f && b - t < 1f) return
 
             val color = settings.padColor
-            fillPaint.color = ColorUtils.setAlphaComponent(color, 45) // полупрозрачная неоновая заливка
+            // После отпускания кнопки рамка чуть ярче заливается: видно, что захват зафиксирован
+            fillPaint.color = ColorUtils.setAlphaComponent(color, if (held) 70 else 45)
             strokePaint.color = color
-            strokePaint.strokeWidth = 2f * density // яркая тонкая обводка
+            strokePaint.strokeWidth = 2f * density
 
-            val rect = RectF(l, t, r, b)
-            val radius = 4f * density
+            rect.set(l, t, r, b)
+            val radius = 3f * density
 
             c.drawRoundRect(rect, radius, radius, fillPaint)
 
@@ -161,6 +175,24 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
             c.drawRoundRect(rect, radius, radius, glowPaint)
 
             c.drawRoundRect(rect, radius, radius, strokePaint)
+
+            // Белый пунктир поверх обводки — классический «маркер» выделения
+            dashPaint.color = ColorUtils.setAlphaComponent(Color.WHITE, 220)
+            dashPaint.strokeWidth = 1.2f * density
+            dashPaint.pathEffect = DashPathEffect(floatArrayOf(6f * density, 6f * density), 0f)
+            c.drawRoundRect(rect, radius, radius, dashPaint)
+
+            // Угловые маркеры: белый квадрат с цветной серединой
+            val h = 3.5f * density
+            val inset = 1.2f * density
+            for (px in floatArrayOf(l, r)) {
+                for (py in floatArrayOf(t, b)) {
+                    cornerFill.color = Color.WHITE
+                    c.drawRect(px - h, py - h, px + h, py + h, cornerFill)
+                    cornerFill.color = color
+                    c.drawRect(px - h + inset, py - h + inset, px + h - inset, py + h - inset, cornerFill)
+                }
+            }
         }
     }
 
@@ -353,6 +385,7 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         sv.ex = startX
         sv.ey = startY
         sv.active = true
+        sv.held = false
         if (!selectionShown) {
             try {
                 wm.addView(sv, selectionLp)
@@ -370,9 +403,31 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         sv.invalidate()
     }
 
+    /** Рамка сейчас на экране (рисуется или удерживается после отпускания кнопки). */
+    val isSelectionActive: Boolean get() = selectionShown && selectionView?.active == true
+
+    /**
+     * Кнопку мыши отпустили: рамка остаётся на экране как выделение, пока её не уберут
+     * (endSelection) — например, новым кликом или действием из меню.
+     */
+    fun holdSelection() {
+        val sv = selectionView ?: return
+        if (!sv.active) return
+        sv.held = true
+        sv.invalidate()
+    }
+
+    /** Текущая рамка в экранных координатах (left <= right, top <= bottom) или null, если её нет. */
+    fun selectionRect(): RectF? {
+        val sv = selectionView ?: return null
+        if (!sv.active) return null
+        return RectF(minOf(sv.sx, sv.ex), minOf(sv.sy, sv.ey), maxOf(sv.sx, sv.ex), maxOf(sv.sy, sv.ey))
+    }
+
     fun endSelection() {
         val sv = selectionView ?: return
         sv.active = false
+        sv.held = false
         if (selectionShown) {
             try {
                 wm.removeView(sv)
