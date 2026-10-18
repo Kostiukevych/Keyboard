@@ -2,7 +2,8 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/pad_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:splitMotionEvents="true">
 
     <!-- Внешняя карточка-платформа со стеклянным градиентом -->
     <LinearLayout
@@ -14,7 +15,8 @@
         android:paddingStart="8dp"
         android:paddingTop="8dp"
         android:paddingEnd="8dp"
-        android:paddingBottom="6dp">
+        android:paddingBottom="6dp"
+        android:splitMotionEvents="true">
 
         <!-- Верхняя полоса управления (Заголовок для перетаскивания + стеклянные кнопки) -->
         <LinearLayout
@@ -43,15 +45,6 @@
                 android:layout_height="28dp"
                 android:text="🔓"
                 android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/pad_btn_sel"
-                style="@style/BarKeyStyle"
-                android:layout_width="32dp"
-                android:layout_height="28dp"
-                android:text="Ab"
-                android:textSize="12sp"
-                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/pad_btn_files"
@@ -92,13 +85,15 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_touchpad_well">
+            android:background="@drawable/bg_touchpad_well"
+            android:splitMotionEvents="true">
 
             <!-- Внутренний контейнер: верхние кнопки + зона движения -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:splitMotionEvents="true">
 
                 <!-- Верхний блок: полоска ЛКМ, Колесо, полоска ПКМ (.top-bar) -->
                 <LinearLayout
@@ -106,7 +101,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
                     android:background="#20000000"
-                    android:orientation="horizontal">
+                    android:orientation="horizontal"
+                    android:splitMotionEvents="true">
 
                     <!-- Кнопка ЛКМ с индикацией зарядки и горизонтальной неоновой полоской hz -->
                     <FrameLayout
@@ -136,7 +132,7 @@
                     <!-- Блок колёсика (.wheel-box) -->
                     <FrameLayout
                         android:id="@+id/pad_wheel_box"
-                        android:layout_width="56dp"
+                        android:layout_width="64dp"
                         android:layout_height="match_parent"
                         android:background="#40000000"
                         android:clickable="true"
@@ -157,8 +153,8 @@
                         <!-- Колёсико (.wheel) -->
                         <FrameLayout
                             android:id="@+id/pad_wheel"
-                            android:layout_width="26dp"
-                            android:layout_height="48dp"
+                            android:layout_width="20dp"
+                            android:layout_height="54dp"
                             android:layout_gravity="center">
 
                             <com.example.virtualmouse.WheelView
@@ -217,6 +213,22 @@
         android:orientation="vertical"
         android:padding="6dp"
         android:visibility="gone">
+
+        <TextView
+            android:id="@+id/ctx_refresh"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Обновить      Ctrl+R"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_margin="3dp"
+            android:background="#402E7BFF" />
 
         <TextView
             android:id="@+id/ctx_undo"

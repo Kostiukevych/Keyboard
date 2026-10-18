@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ic_virtual_mouse_logo"
+        android:drawable="@drawable/ic_trackball_launcher"
         android:gravity="center" />
 </layer-list>

@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -35,9 +36,9 @@ private const val BALL_ASPECT = 1.15f
 
 /**
  * Трекбол Orbit X: прозрачное окно, в котором виден только сам трекбол (без рамки тачпада).
- *  - шар — движение курсора, ЛКМ (удержание 0.8 с = перетаскивание), ПКМ (дважды = меню правки),
+ *  - шар — движение курсора, ЛКМ (удержание 0.8 с = перетаскивание), ПКМ (дважды = меню правки, зажатие > 100мс + движение шара = выделение рамкой),
  *  - колёсико — скролл,
- *  - двойное нажатие на ЛКМ — меню: тачпад, настройки, замок, выделение, файлы, клавиатура, правка,
+ *  - двойное нажатие на ЛКМ — меню: тачпад, настройки, замок, файлы, клавиатура, правка,
  *  - корпус трекбола можно таскать пальцем (если не закреплён замком).
  * Все настройки (курсоры, скин, поворот, чувствительность) — в HTML-панели trackball.html.
  */
@@ -80,8 +81,12 @@ class TrackballWindow(
         engage()
     }
 
-    private var selectMode = false
-    private var selDrag = false
+    // Выделение рамкой (зажатая ПКМ > 100 мс + движение шара)
+    private var rDown = false
+    private var rDownTime = 0L
+    private var rBoxSelecting = false
+    private var rBoxStartX = 0f
+    private var rBoxStartY = 0f
 
     private var rClickCount = 0
     private var rClickTimer: Runnable? = null
@@ -172,9 +177,12 @@ class TrackballWindow(
         handler.removeCallbacks(engageRun)
         leftPending = false
         if (held) release()
-        if (selDrag) { MouseAccessibilityService.instance?.dragEnd(); selDrag = false }
+        if (rBoxSelecting) {
+            cursor.endSelection()
+            MouseAccessibilityService.instance?.dragEnd()
+            rBoxSelecting = false
+        }
         MouseAccessibilityService.instance?.scrollEnd()
-        selectMode = false
         panelOpen = false
         closeContextMenu()
         root?.let {
@@ -226,6 +234,7 @@ class TrackballWindow(
         @JavascriptInterface fun onBallDown() { handler.post { ballDown() } }
         @JavascriptInterface fun onBallUp() { handler.post { ballUp() } }
         @JavascriptInterface fun onLeft(down: Int) { handler.post { if (down == 1) leftDown() else leftUp() } }
+        @JavascriptInterface fun onRight(down: Int) { handler.post { if (down == 1) rightDown() else rightUp() } }
         @JavascriptInterface fun onRight() { handler.post { rightDown() } }
         @JavascriptInterface fun onWheelStart() { handler.post { wheelStart() } }
         @JavascriptInterface fun onWheel(dy: Double) { handler.post { wheelMove(dy.toFloat()) } }
@@ -244,7 +253,7 @@ class TrackballWindow(
             o.put("sens", s.sensitivity.toDouble())
             o.put("ws", s.ballWidthDp.toDouble() / BALL_BASE_DP)
             o.put("locked", s.padLocked)
-            o.put("sel", selectMode)
+            o.put("sel", rBoxSelecting)
             return o.toString()
         }
 
@@ -254,29 +263,34 @@ class TrackballWindow(
     private fun move(dx: Float, dy: Float) {
         val k = getSettings().sensitivity
         cursor.moveBy(dx * k, dy * k)
-        if (held || selDrag) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+        if (rDown) {
+            val pressDuration = SystemClock.uptimeMillis() - rDownTime
+            if (pressDuration >= 100) {
+                if (!rBoxSelecting) {
+                    rBoxSelecting = true
+                    rClickTimer?.let { handler.removeCallbacks(it) }
+                    rClickCount = 0
+                    rBoxStartX = cursor.x
+                    rBoxStartY = cursor.y
+                    cursor.startSelection(rBoxStartX, rBoxStartY)
+                    svc()?.boxSelectStart(rBoxStartX, rBoxStartY)
+                    vibrate(25)
+                    sounds.beep(320)
+                } else {
+                    cursor.updateSelection(cursor.x, cursor.y)
+                    svc()?.boxSelectMove(cursor.x, cursor.y)
+                }
+            }
+        } else if (held) {
+            MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+        }
     }
 
     private fun ballDown() {
         closeContextMenu()
-        if (selectMode && !held) {
-            val a = svc()
-            if (a != null) {
-                a.dragStart(cursor.x, cursor.y, 600)
-                selDrag = true
-                vibrate(25)
-            }
-        }
     }
 
     private fun ballUp() {
-        if (selDrag) {
-            MouseAccessibilityService.instance?.dragEnd()
-            selDrag = false
-            selectMode = false
-            sounds.beep(180)
-            pushFlags()
-        }
     }
 
     // ---------- Состояние HTML-панели ----------
@@ -313,7 +327,7 @@ class TrackballWindow(
 
     private fun pushFlags() {
         val s = getSettings()
-        web?.evaluateJavascript("window.setFlags&&setFlags(${s.padLocked},$selectMode)", null)
+        web?.evaluateJavascript("window.setFlags&&setFlags(${s.padLocked},$rBoxSelecting)", null)
     }
 
     /** Окно временно увеличивается, пока открыто меню или настройки. */
@@ -338,15 +352,11 @@ class TrackballWindow(
                 save()
                 pushFlags()
             }
-            "sel" -> {
-                selectMode = !selectMode
-                if (selectMode) Toast.makeText(ctx, "Выделение: зажмите шар и крутите его", Toast.LENGTH_SHORT).show()
-                pushFlags()
-            }
             "files" -> FileManagerLauncher.open(ctx)
             "kb" -> onKeyboard()
             "appset" -> onSettings()
             "close" -> onHide()
+            "refresh" -> svc()?.refreshPage()
             "undo" -> svc()?.undo()
             "redo" -> svc()?.redo()
             "cut" -> svc()?.cutSelection()
@@ -396,28 +406,53 @@ class TrackballWindow(
         leftIgnore = false
     }
 
-    // ---------- ПКМ: один раз = правый клик, дважды (или при зажатой ЛКМ) = меню ----------
+    // ---------- ПКМ: зажатие > 100мс + движение = рамка, короткий тап = правый клик, дважды = меню ----------
 
     private fun rightDown() {
-        if (held) {
-            sounds.beep(160)
-            openContextMenu()
-            return
-        }
-        rClickCount++
-        rClickTimer?.let { handler.removeCallbacks(it) }
-        if (rClickCount >= 2) {
+        closeContextMenu()
+        rDown = true
+        rDownTime = SystemClock.uptimeMillis()
+        rBoxSelecting = false
+        rBoxStartX = cursor.x
+        rBoxStartY = cursor.y
+    }
+
+    private fun rightUp() {
+        rDown = false
+        if (rBoxSelecting) {
+            rBoxSelecting = false
             rClickCount = 0
-            sounds.beep(160)
+            rClickTimer?.let { handler.removeCallbacks(it) }
+            cursor.endSelection()
+            svc()?.boxSelectEnd(rBoxStartX, rBoxStartY, cursor.x, cursor.y)
+            sounds.beep(180)
             openContextMenu()
         } else {
-            sounds.beep(120)
-            val runner = Runnable {
+            val duration = SystemClock.uptimeMillis() - rDownTime
+            if (held) {
+                sounds.beep(160)
+                openContextMenu()
+            } else if (duration < 400) {
+                rClickCount++
+                rClickTimer?.let { handler.removeCallbacks(it) }
+                if (rClickCount >= 2) {
+                    rClickCount = 0
+                    sounds.beep(160)
+                    openContextMenu()
+                } else {
+                    sounds.beep(120)
+                    val runner = Runnable {
+                        rClickCount = 0
+                        svc()?.rightClick(cursor.x, cursor.y)
+                    }
+                    rClickTimer = runner
+                    handler.postDelayed(runner, 280)
+                }
+            } else {
                 rClickCount = 0
-                svc()?.rightClick(cursor.x, cursor.y)
+                sounds.beep(160)
+                openContextMenu()
             }
-            rClickTimer = runner
-            handler.postDelayed(runner, 300)
         }
     }
 
@@ -442,7 +477,7 @@ class TrackballWindow(
         MouseAccessibilityService.instance?.scrollEnd()
     }
 
-    // ---------- Контекстное меню правки (двойной ПКМ) ----------
+    // ---------- Контекстное меню правки ----------
 
     private fun openContextMenu() {
         ctxMenu?.visibility = View.VISIBLE
@@ -460,6 +495,7 @@ class TrackballWindow(
                 svc()?.let(run)
             }
         }
+        act(R.id.ctx_refresh) { it.refreshPage() }
         act(R.id.ctx_undo) { it.undo() }
         act(R.id.ctx_redo) { it.redo() }
         act(R.id.ctx_cut) { it.cutSelection() }

@@ -383,7 +383,7 @@ html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:n
   mbtn(g2,'files','📁 Файлы');mbtn(g2,'kb','⌨ Клавиатура');
   mbtn(g2,'close','✕ Скрыть трекбол',1);
   var g3=msec('Правка');
-  [['undo','Отменить'],['redo','Повторить'],['cut','Вырезать'],['copy','Копировать'],['paste','Вставить'],['delete','Удалить'],['all','Выделить всё']].forEach(function(a){mbtn(g3,a[0],a[1])});
+  [['refresh','Обновить'],['undo','Отменить'],['redo','Повторить'],['cut','Вырезать'],['copy','Копировать'],['paste','Вставить'],['delete','Удалить'],['all','Выделить всё']].forEach(function(a){mbtn(g3,a[0],a[1])});
   menu.querySelector('#mx').onclick=closePanel;
 
   var lastKl=0,klDbl=false;
@@ -396,7 +396,8 @@ html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:n
       klDbl=false;lastKl=n;Android.onLeft(1);
     });
     ['pointerup','pointercancel'].forEach(function(n){KL.addEventListener(n,function(){if(klDbl){klDbl=false;return}Android.onLeft(0)})});
-    KR.addEventListener('pointerdown',function(){Android.onRight()});
+    KR.addEventListener('pointerdown',function(){Android.onRight(1)});
+    ['pointerup','pointercancel'].forEach(function(n){KR.addEventListener(n,function(){Android.onRight(0)})});
     /* корпус трекбола (всё, что не кнопки и не колесо) таскает окно целиком */
     SV.addEventListener('pointerdown',function(e){if(e.target.closest&&!e.target.closest('.key,#wh'))Android.dragZone(1)});
   }

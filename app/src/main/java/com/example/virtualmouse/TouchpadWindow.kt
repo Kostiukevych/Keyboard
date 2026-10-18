@@ -59,11 +59,13 @@ class TouchpadWindow(
     private var lockBtn: TextView? = null
     private var wheelView: WheelView? = null
     private var ctxMenu: View? = null
-    private var selBtn: TextView? = null
 
-    // Режим выделения текста: касание-удержание + движение = выделение, как зажатая ЛКМ над текстом
-    private var selectMode = false
-    private var selDrag = false
+    // Выделение рамкой (зажатая ПКМ > 100 мс + движение вторым пальцем)
+    private var rDown = false
+    private var rDownTime = 0L
+    private var rBoxSelecting = false
+    private var rBoxStartX = 0f
+    private var rBoxStartY = 0f
 
     private var held = false
     private var charging = false
@@ -71,7 +73,6 @@ class TouchpadWindow(
 
     private var rClickCount = 0
     private var rClickTimer: Runnable? = null
-    private var lastWheelTick = 0f
 
     override val isShown: Boolean get() = root != null
 
@@ -133,9 +134,12 @@ class TouchpadWindow(
     override fun hide() {
         stopCharge()
         if (held) release()
-        if (selDrag) { MouseAccessibilityService.instance?.dragEnd(); selDrag = false }
+        if (rBoxSelecting) {
+            cursor.endSelection()
+            MouseAccessibilityService.instance?.dragEnd()
+            rBoxSelecting = false
+        }
         MouseAccessibilityService.instance?.scrollEnd()
-        selectMode = false
         closeContextMenu()
         root?.let {
             try {
@@ -239,15 +243,7 @@ class TouchpadWindow(
         lockBtn = v.findViewById(R.id.pad_btn_lock)
         wheelView = v.findViewById(R.id.pad_wheel_view)
         ctxMenu = v.findViewById(R.id.pad_ctx_menu)
-        selBtn = v.findViewById(R.id.pad_btn_sel)
 
-        selBtn?.isSelected = selectMode
-        selBtn?.setOnClickListener {
-            selectMode = !selectMode
-            selBtn?.isSelected = selectMode
-            sounds.beep(if (selectMode) 420 else 240)
-            if (selectMode) Toast.makeText(ctx, "Выделение: тяните по тачпаду (тап — слово)", Toast.LENGTH_SHORT).show()
-        }
         v.findViewById<View>(R.id.pad_btn_files)?.setOnClickListener {
             sounds.beep(340)
             FileManagerLauncher.open(ctx)
@@ -382,31 +378,62 @@ class TouchpadWindow(
     private fun bindRight(b: View) {
         b.setOnTouchListener { v, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                     v.alpha = 0.8f
-                    if (held) {
-                        sounds.beep(160)
+                    closeContextMenu()
+                    rDown = true
+                    rDownTime = SystemClock.uptimeMillis()
+                    rBoxSelecting = false
+                    rBoxStartX = cursor.x
+                    rBoxStartY = cursor.y
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                    v.alpha = 1f
+                    rDown = false
+                    if (rBoxSelecting) {
+                        rBoxSelecting = false
+                        rClickCount = 0
+                        rClickTimer?.let { handler.removeCallbacks(it) }
+                        cursor.endSelection()
+                        svc()?.boxSelectEnd(rBoxStartX, rBoxStartY, cursor.x, cursor.y)
+                        sounds.beep(180)
                         openContextMenu()
                     } else {
-                        rClickCount++
-                        rClickTimer?.let { handler.removeCallbacks(it) }
-                        if (rClickCount >= 2) {
+                        val duration = SystemClock.uptimeMillis() - rDownTime
+                        if (held) {
+                            sounds.beep(160)
+                            openContextMenu()
+                        } else if (duration < 400) {
+                            rClickCount++
+                            rClickTimer?.let { handler.removeCallbacks(it) }
+                            if (rClickCount >= 2) {
+                                rClickCount = 0
+                                sounds.beep(160)
+                                openContextMenu()
+                            } else {
+                                sounds.beep(120)
+                                val runner = Runnable {
+                                    rClickCount = 0
+                                    svc()?.rightClick(cursor.x, cursor.y)
+                                }
+                                rClickTimer = runner
+                                handler.postDelayed(runner, 280)
+                            }
+                        } else {
                             rClickCount = 0
                             sounds.beep(160)
                             openContextMenu()
-                        } else {
-                            sounds.beep(120)
-                            val runner = Runnable {
-                                rClickCount = 0
-                                svc()?.rightClick(cursor.x, cursor.y)
-                            }
-                            rClickTimer = runner
-                            handler.postDelayed(runner, 300)
                         }
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_CANCEL -> {
                     v.alpha = 1f
+                    rDown = false
+                    if (rBoxSelecting) {
+                        rBoxSelecting = false
+                        cursor.endSelection()
+                        svc()?.boxSelectEnd(rBoxStartX, rBoxStartY, cursor.x, cursor.y)
+                    }
                 }
             }
             true
@@ -430,6 +457,7 @@ class TouchpadWindow(
                 svc()?.let(run)
             }
         }
+        act(R.id.ctx_refresh) { it.refreshPage() }
         act(R.id.ctx_undo) { it.undo() }
         act(R.id.ctx_redo) { it.redo() }
         act(R.id.ctx_cut) { it.cutSelection() }
@@ -442,27 +470,29 @@ class TouchpadWindow(
     private fun bindWheel(w: View) {
         var last = 0f
         var tickAcc = 0f
-        w.setOnTouchListener { _, e ->
+        w.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
                     closeContextMenu()
                     last = e.rawY
                     tickAcc = 0f
-                    lastWheelTick = 0f
                     // Палец «ставится» на позицию курсора и дальше едет вместе с колёсиком
                     svc()?.scrollBegin(cursor.x, cursor.y)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = e.rawY - last
                     last = e.rawY
-                    tickAcc += dy
-                    wheelView?.setScrollOffset(dy)
-
-                    if (abs(tickAcc - lastWheelTick) >= dp(8)) {
-                        sounds.wheelTick()
-                        lastWheelTick = tickAcc
+                    if (dy != 0f) {
+                        // Вращение 3D-колеса и щелчки: так же, как в трекболе
+                        wheelView?.setScrollOffset(dy)
+                        tickAcc += abs(dy)
+                        if (tickAcc >= dp(8)) {
+                            sounds.wheelTick()
+                            tickAcc = 0f
+                        }
+                        MouseAccessibilityService.instance?.scrollBy(dy, WHEEL_GAIN)
                     }
-                    MouseAccessibilityService.instance?.scrollBy(dy, WHEEL_GAIN)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     MouseAccessibilityService.instance?.scrollEnd()
@@ -481,49 +511,51 @@ class TouchpadWindow(
         var far = false
         m.setOnTouchListener { _, e ->
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                     closeContextMenu()
                     lx = e.rawX; ly = e.rawY; sx = lx; sy = ly
                     t0 = e.eventTime; far = false
                     cursor.setPressed(true)
-                    if (selectMode && !held) {
-                        // Долгое нажатие на месте курсора начинает выделение, движение тянет его
-                        val a = svc()
-                        if (a != null) {
-                            a.dragStart(cursor.x, cursor.y, 600)
-                            selDrag = true
-                            vibrate(25)
-                        }
-                    }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val k = getSettings().sensitivity
                     cursor.moveBy((e.rawX - lx) * k, (e.rawY - ly) * k)
                     lx = e.rawX; ly = e.rawY
                     if (hypot(lx - sx, ly - sy) > dp(10)) far = true
-                    if (held || selDrag) MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+
+                    if (rDown) {
+                        // Правая кнопка зажата: выделение рамкой
+                        val pressDuration = SystemClock.uptimeMillis() - rDownTime
+                        if (pressDuration >= 100) {
+                            if (!rBoxSelecting) {
+                                rBoxSelecting = true
+                                rClickTimer?.let { handler.removeCallbacks(it) }
+                                rClickCount = 0
+                                rBoxStartX = cursor.x
+                                rBoxStartY = cursor.y
+                                cursor.startSelection(rBoxStartX, rBoxStartY)
+                                svc()?.boxSelectStart(rBoxStartX, rBoxStartY)
+                                vibrate(25)
+                                sounds.beep(320)
+                            } else {
+                                cursor.updateSelection(cursor.x, cursor.y)
+                                svc()?.boxSelectMove(cursor.x, cursor.y)
+                            }
+                        }
+                    } else if (held) {
+                        // Зажатый ЛКМ-режим (замок) активен
+                        MouseAccessibilityService.instance?.dragMove(cursor.x, cursor.y)
+                    }
                 }
-                MotionEvent.ACTION_UP -> {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                     cursor.setPressed(false)
-                    if (selDrag) {
-                        MouseAccessibilityService.instance?.dragEnd()
-                        selDrag = false
-                        selectMode = false
-                        selBtn?.isSelected = false
-                        sounds.beep(180)
-                    } else if (!far && !held && e.eventTime - t0 < 250) {
+                    if (!rDown && !rBoxSelecting && !far && !held && e.eventTime - t0 < 250) {
                         svc()?.click(cursor.x, cursor.y)
                         sounds.beep(180)
                     }
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     cursor.setPressed(false)
-                    if (selDrag) {
-                        MouseAccessibilityService.instance?.dragEnd()
-                        selDrag = false
-                        selectMode = false
-                        selBtn?.isSelected = false
-                    }
                 }
             }
             true

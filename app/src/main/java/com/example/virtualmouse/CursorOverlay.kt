@@ -9,6 +9,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.RectF
 import android.os.Build
 import android.util.DisplayMetrics
 import android.view.Choreographer
@@ -16,6 +17,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.PathParser
 
 /** Формы курсора из HTML Orbit X (viewBox 32x32). x,y — «горячая точка». */
@@ -39,6 +41,7 @@ internal val CURSOR_SHAPES: Map<String, CursorShape> = mapOf(
  * (заливка / тёмный / контур, цвет, неоновое свечение).
  * Перемещение объединяется по кадрам (Choreographer): окно двигается не чаще одного раза за кадр,
  * поэтому курсор не «лагает» при частых событиях касания.
+ * Также отображает неоновую рамку выделения при зажатой правой кнопке.
  */
 class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
@@ -72,6 +75,21 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
+    // Оверлей рамки выделения
+    private var selectionView: SelectionBoxView? = null
+    private var selectionShown = false
+    private val selectionLp = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+        PixelFormat.TRANSLUCENT
+    ).apply { gravity = Gravity.TOP or Gravity.START }
+
     init {
         if (Build.VERSION.SDK_INT >= 30) {
             val b = wm.currentWindowMetrics.bounds
@@ -95,6 +113,54 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
         override fun onDraw(c: Canvas) {
             icon?.let { c.drawBitmap(it, 0f, 0f, null) }
+        }
+    }
+
+    private inner class SelectionBoxView(c: Context) : View(c) {
+        init {
+            setLayerType(LAYER_TYPE_SOFTWARE, null)
+        }
+
+        var sx = 0f
+        var sy = 0f
+        var ex = 0f
+        var ey = 0f
+        var active = false
+
+        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
+        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+        }
+        private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+        }
+
+        override fun onDraw(c: Canvas) {
+            if (!active) return
+            val l = minOf(sx, ex)
+            val t = minOf(sy, ey)
+            val r = maxOf(sx, ex)
+            val b = maxOf(sy, ey)
+            if (r - l < 1f && b - t < 1f) return
+
+            val color = settings.padColor
+            fillPaint.color = ColorUtils.setAlphaComponent(color, 45) // полупрозрачная неоновая заливка
+            strokePaint.color = color
+            strokePaint.strokeWidth = 2f * density // яркая тонкая обводка
+
+            val rect = RectF(l, t, r, b)
+            val radius = 4f * density
+
+            c.drawRoundRect(rect, radius, radius, fillPaint)
+
+            glowPaint.color = ColorUtils.setAlphaComponent(color, 90)
+            glowPaint.strokeWidth = 4f * density
+            glowPaint.maskFilter = BlurMaskFilter(4f * density, BlurMaskFilter.Blur.NORMAL)
+            c.drawRoundRect(rect, radius, radius, glowPaint)
+
+            c.drawRoundRect(rect, radius, radius, strokePaint)
         }
     }
 
@@ -255,6 +321,7 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
 
     fun applySettings(s: CursorSettings) {
         settings = s
+        selectionView?.invalidate()
         rebuild()
     }
 
@@ -277,9 +344,50 @@ class CursorOverlay(private val ctx: Context, private val wm: WindowManager) {
         }
     }
 
+    // ---------- Рамка выделения ----------
+
+    fun startSelection(startX: Float, startY: Float) {
+        val sv = selectionView ?: SelectionBoxView(ctx).also { selectionView = it }
+        sv.sx = startX
+        sv.sy = startY
+        sv.ex = startX
+        sv.ey = startY
+        sv.active = true
+        if (!selectionShown) {
+            try {
+                wm.addView(sv, selectionLp)
+                selectionShown = true
+            } catch (_: Exception) {
+            }
+        }
+        sv.invalidate()
+    }
+
+    fun updateSelection(curX: Float, curY: Float) {
+        val sv = selectionView ?: return
+        sv.ex = curX
+        sv.ey = curY
+        sv.invalidate()
+    }
+
+    fun endSelection() {
+        val sv = selectionView ?: return
+        sv.active = false
+        if (selectionShown) {
+            try {
+                wm.removeView(sv)
+            } catch (_: Exception) {
+            }
+            selectionShown = false
+        }
+        sv.invalidate()
+    }
+
     fun destroy() {
+        endSelection()
         hide()
         view?.icon?.recycle()
         view = null
+        selectionView = null
     }
 }

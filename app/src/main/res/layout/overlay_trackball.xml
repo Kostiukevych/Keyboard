@@ -25,6 +25,22 @@
         android:visibility="gone">
 
         <TextView
+            android:id="@+id/ctx_refresh"
+            style="@style/BarKeyStyle"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:gravity="start|center_vertical"
+            android:paddingStart="10dp"
+            android:text="Обновить      Ctrl+R"
+            android:textSize="12sp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_margin="3dp"
+            android:background="#402E7BFF" />
+
+        <TextView
             android:id="@+id/ctx_undo"
             style="@style/BarKeyStyle"
             android:layout_width="match_parent"
