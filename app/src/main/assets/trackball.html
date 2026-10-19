@@ -62,6 +62,12 @@ html.and .mouse svg{filter:drop-shadow(0 8px 6px rgba(0,0,0,.55))}
 html.pm body{justify-content:flex-start;gap:6px;padding-top:6px}
 html.and.pm .mouse{height:24vh;flex:none;max-width:60vw}
 html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:none;max-height:none;flex:1 1 auto;min-height:0;margin:0 8px 8px;overflow:auto}
+/* Окна меню и настроек всегда тёмные и непрозрачные */
+.dlg,.dlg[data-s=classic]{background:linear-gradient(160deg,#1c232d,#080b10)!important;opacity:1!important;color:#dfe9f0!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.dlg[data-s=glass]{background:linear-gradient(160deg,#0f1822,#06090d)!important;border-color:var(--acc)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.dlg[data-s=holo]{background:linear-gradient(#0b0f18,#0b0f18) padding-box,linear-gradient(135deg,#ff7ae0,#7affea,#9a8bff,#ffe77a) border-box!important}
+.dlg[data-s=bubble]{background:linear-gradient(#0b0f18,#0b0f18) padding-box,conic-gradient(#ffd6f5,#c9f3ff,#e3d6ff,#fff3c4,#ffd6f5) border-box!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+html.pm .dlg{opacity:1!important}
 </style>
 </head>
 <body>
@@ -163,15 +169,35 @@ html.pm .dlg{position:static;transform:none;width:calc(100vw - 16px);max-width:n
   }
   function drawClassic(){
     ctx.clearRect(0,0,S,S);
-    var g=ctx.createRadialGradient(C-.3*R,C-.35*R,R*.05,C,C,R);g.addColorStop(0,'#3d4959');g.addColorStop(.55,'#0f141c');g.addColorStop(1,'#030507');
+    /* сине-салатовая неоновая сфера (как в Orbit X): синий центр -> бирюза -> салат у края */
+    var g=ctx.createRadialGradient(C-.12*R,C-.18*R,R*.04,C,C,R);
+    g.addColorStop(0,'#2f86ff');g.addColorStop(.32,'#10bfe0');g.addColorStop(.66,'#2fe58a');
+    g.addColorStop(.9,'#9cff3a');g.addColorStop(1,'#2a5a14');
     ctx.fillStyle=g;disc();ctx.fill();
+    ctx.save();disc();ctx.clip();
+    /* ячеистая «голографическая» сетка, едет вместе с вращением шара */
+    var hw=26,hh=hw*.866,ox=(spin*.12)%(hw*3),oy=(spin*.07)%(hh*2);
+    ctx.lineWidth=1.2;ctx.strokeStyle='rgba(210,255,235,.28)';ctx.beginPath();
+    for(var row=-2;row*hh<S+hh*2;row++){
+      for(var col=-2;col*hw*1.5<S+hw*2;col++){
+        var hx=col*hw*1.5+ox,hy=row*hh*2+(col&1?hh:0)+oy;
+        for(var a=0;a<6;a++){var an=a*1.0472,px=hx+hw*.96*Math.cos(an),py=hy+hw*.96*Math.sin(an);
+          if(a)ctx.lineTo(px,py);else ctx.moveTo(px,py);}
+        ctx.closePath();
+      }
+    }
+    ctx.stroke();
+    /* искры */
     for(var j=0;j<pts.length;j++){var p=pts[j];if(p.z<=0)continue;
-      ctx.fillStyle='rgba('+(NEON&&p.k<.3?NEON.rgb:'215,224,234')+','+(p.a*p.z).toFixed(2)+')';
-      ctx.beginPath();ctx.arc(C+p.x*R*.98,C+p.y*R*.98,p.s*(.4+.6*p.z)*1.8,0,6.2832);ctx.fill();}
-    var v=ctx.createRadialGradient(C,C,R*.6,C,C,R);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.65)');
+      ctx.fillStyle=p.k<.4?'rgba(214,255,120,'+(p.a*p.z).toFixed(2)+')':'rgba(255,255,255,'+(p.a*p.z*.8).toFixed(2)+')';
+      ctx.beginPath();ctx.arc(C+p.x*R*.98,C+p.y*R*.98,p.s*(.4+.6*p.z)*1.6,0,6.2832);ctx.fill();}
+    ctx.restore();
+    /* затемнение к краю и неоновый ободок */
+    var v=ctx.createRadialGradient(C,C,R*.62,C,C,R);v.addColorStop(0,'rgba(0,10,20,0)');v.addColorStop(1,'rgba(0,12,24,.55)');
     ctx.fillStyle=v;disc();ctx.fill();
+    ctx.lineWidth=3;ctx.strokeStyle='rgba(156,255,58,.85)';ctx.beginPath();ctx.arc(C,C,R-1.5,0,6.2832);ctx.stroke();
     var h=ctx.createRadialGradient(C-.38*R,C-.42*R,0,C-.38*R,C-.42*R,R*.55);
-    h.addColorStop(0,'rgba(255,255,255,.55)');h.addColorStop(.4,'rgba(200,240,255,.15)');h.addColorStop(1,'rgba(255,255,255,0)');
+    h.addColorStop(0,'rgba(255,255,255,.6)');h.addColorStop(.4,'rgba(200,255,240,.18)');h.addColorStop(1,'rgba(255,255,255,0)');
     ctx.fillStyle=h;disc();ctx.fill();
   }
   function drawGlass(){

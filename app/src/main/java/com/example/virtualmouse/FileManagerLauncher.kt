@@ -11,10 +11,12 @@ import android.widget.Toast
  * Быстрый запуск файлового менеджера.
  *
  * Порядок выбора:
- *  1) менеджер, который пользователь выбрал в настройках (getSaved);
- *  2) автоопределение: сначала УСТАНОВЛЕННЫЕ пользователем (не системные) менеджеры,
- *     потом известные системные;
- *  3) запасные варианты системы (DocumentsUI / выбор файла).
+ *  1) менеджер, который пользователь явно выбрал в настройках (getSaved) — запускается он;
+ *  2) по умолчанию («Авто») — системное окно «Открыть» (DocumentsUI): слева список Видео / Аудио /
+ *     Документы / Скачанные / память устройства / карта памяти и приложения-источники
+ *     («Мои файлы», «Файловый менеджер+», Галерея…) — пользователь сам выбирает, откуда открыть;
+ *  3) запасные варианты системы.
+ * Раньше «Авто» подбирало первый попавшийся пакет по названию и могло запустить WPS Office.
  *
  * ВАЖНО: чтобы Android 11+ вообще показал приложению чужие пакеты, в манифесте должны быть
  * разрешение QUERY_ALL_PACKAGES и блок <queries> с intent-фильтрами (это делает AndroidManifest.xml).
@@ -74,7 +76,7 @@ object FileManagerLauncher {
     /** Подпись для строки в настройках: имя выбранного приложения или «Авто». */
     fun savedLabel(ctx: Context): String {
         val p = getSaved(ctx)
-        if (p.isEmpty()) return "Авто (ваш менеджер)"
+        if (p.isEmpty()) return "Окно выбора файлов"
         return labelOf(ctx, p) ?: "Не найден: $p"
     }
 
@@ -155,37 +157,53 @@ object FileManagerLauncher {
 
     // ---------- Запуск ----------
 
+    /** Системные пакеты окна «Открыть» (DocumentsUI), по порядку попыток. */
+    private val DOCUMENTS_UI = listOf(
+        "com.google.android.documentsui",
+        "com.android.documentsui"
+    )
+
     fun open(ctx: Context) {
         val pm = ctx.packageManager
 
-        // 1) явный выбор пользователя
+        // 1) явный выбор пользователя в настройках
         val saved = getSaved(ctx)
         if (saved.isNotEmpty()) {
             val i = pm.getLaunchIntentForPackage(saved)
             if (i != null && tryStart(ctx, i)) return
-            // выбранный менеджер удалён/недоступен — идём дальше по автоопределению
+            // выбранный менеджер удалён — показываем окно выбора файлов
         }
 
-        // 2) автоопределение: сначала пользовательские, потом системные
-        for (a in candidates(ctx)) {
-            val i = pm.getLaunchIntentForPackage(a.pkg) ?: continue
-            if (tryStart(ctx, i)) return
-        }
+        // 2) системное окно «Открыть» с боковой панелью источников
+        if (openPicker(ctx)) return
 
-        // 3) запасные варианты системы
+        // 3) запасные варианты
         if (tryStart(ctx, Intent(Intent.ACTION_MAIN).addCategory("android.intent.category.APP_FILES"))) return
         val view = Intent(Intent.ACTION_VIEW).setDataAndType(
             Uri.parse("content://com.android.externalstorage.documents/root/primary"),
             "vnd.android.document/root"
         )
         if (tryStart(ctx, view)) return
-        val pick = Intent.createChooser(
-            Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
-            "Файлы"
-        )
-        if (!tryStart(ctx, pick)) {
-            Toast.makeText(ctx, "Файловый менеджер не найден", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, "Окно выбора файлов не найдено", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Окно «Открыть»: сначала напрямую в DocumentsUI (без списка «Открыть с помощью» и без WPS Office),
+     * иначе — обычный ACTION_OPEN_DOCUMENT / ACTION_GET_CONTENT системы.
+     */
+    private fun openPicker(ctx: Context): Boolean {
+        fun docIntent(action: String) = Intent(action)
+            .setType("*/*")
+            .addCategory(Intent.CATEGORY_OPENABLE)
+
+        for (pkg in DOCUMENTS_UI) {
+            if (tryStart(ctx, docIntent(Intent.ACTION_OPEN_DOCUMENT).setPackage(pkg))) return true
         }
+        for (pkg in DOCUMENTS_UI) {
+            if (tryStart(ctx, docIntent(Intent.ACTION_GET_CONTENT).setPackage(pkg))) return true
+        }
+        if (tryStart(ctx, docIntent(Intent.ACTION_OPEN_DOCUMENT))) return true
+        return tryStart(ctx, Intent.createChooser(docIntent(Intent.ACTION_GET_CONTENT), "Файлы"))
     }
 
     private fun tryStart(ctx: Context, i: Intent): Boolean = try {

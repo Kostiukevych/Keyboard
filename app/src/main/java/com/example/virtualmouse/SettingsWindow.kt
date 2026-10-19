@@ -233,7 +233,7 @@ class SettingsWindow(
             overlay.visibility = View.GONE
         }
 
-        if (!showAll) addItem("Авто (ваш менеджер)", saved.isEmpty(), false) { choose("") }
+        if (!showAll) addItem("Окно выбора файлов (по умолчанию)", saved.isEmpty(), false) { choose("") }
         val apps = if (showAll) FileManagerLauncher.allLaunchable(ctx) else FileManagerLauncher.candidates(ctx)
         apps.forEach { app ->
             val label = if (app.system) app.label + " (системный)" else app.label
